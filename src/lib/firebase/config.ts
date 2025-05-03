@@ -6,24 +6,24 @@ import { getFirestore } from 'firebase/firestore';
 
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-// TODO: Replace these placeholders with your actual Firebase project configuration.
-// Make sure to also update the corresponding NEXT_PUBLIC_FIREBASE_* environment variables.
+// IMPORTANT: Ensure your .env file contains the correct values for these environment variables.
+// An invalid or missing API key will cause the "auth/api-key-not-valid" error.
 const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "YOUR_NEW_API_KEY",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "YOUR_NEW_AUTH_DOMAIN",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "YOUR_NEW_PROJECT_ID",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "YOUR_NEW_STORAGE_BUCKET",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "YOUR_NEW_MESSAGING_SENDER_ID",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "YOUR_NEW_APP_ID",
-  // measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID // Optional
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
 // Validate configuration
-if (!firebaseConfig.apiKey || firebaseConfig.apiKey.startsWith("YOUR_NEW_")) {
-    console.warn("Firebase API Key is missing or using placeholder. Please update your environment variables and src/lib/firebase/config.ts");
+if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+  console.warn("Firebase API Key is missing or using a placeholder. Please update your .env file with the correct value from your Firebase project settings to fix authentication errors.");
 }
-if (!firebaseConfig.projectId || firebaseConfig.projectId.startsWith("YOUR_NEW_")) {
-    console.warn("Firebase Project ID is missing or using placeholder. Please update your environment variables and src/lib/firebase/config.ts");
+if (!firebaseConfig.projectId || firebaseConfig.projectId === "YOUR_PROJECT_ID") {
+  console.warn("Firebase Project ID is missing or using a placeholder. Please update your .env file.");
 }
 
 
