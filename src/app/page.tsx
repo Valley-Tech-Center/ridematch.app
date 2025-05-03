@@ -26,11 +26,11 @@ export default function Home() {
         </p>
          <Image
               src="https://picsum.photos/1200/400"
-              alt="People sharing a ride"
+              alt="Person hailing a cab at an airport" // Updated alt text
               width={1200}
               height={400}
               className="rounded-lg shadow-md mx-auto mb-8 object-cover" // Added object-cover
-              data-ai-hint="people car sharing happy"
+              data-ai-hint="person hailing cab airport" // Updated data-ai-hint
               priority // Add priority for LCP image
             />
         <Button asChild size="lg">
