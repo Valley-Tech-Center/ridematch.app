@@ -25,7 +25,7 @@ export default function Home() {
     <div className="container mx-auto py-12 px-4 md:px-6">
       {/* Hero Section */}
       <section className="text-center mb-16">
-        <h1 className="text-4xl md:text-5xl font-bold mb-4 text-primary">Welcome to RideSync</h1>
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 text-primary">Welcome to RideThere</h1>
         <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
           Coordinate airport rides with fellow conference attendees. Save money, reduce emissions, and connect!
         </p>

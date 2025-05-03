@@ -1,3 +1,4 @@
+
 "use client"; // This component uses hooks
 
 import React, { useState, useEffect } from 'react';
@@ -11,6 +12,9 @@ import Link from 'next/link';
 import { ArrowRight, Calendar, MapPin, Users, Car } from "lucide-react";
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns'; // For date formatting
+import { useAuth } from '@/context/auth-context'; // Import useAuth
+import { useRouter } from 'next/navigation'; // Import useRouter
+import { AuthDialog } from '@/components/auth/auth-dialog'; // Import AuthDialog
 
 interface Conference {
   id: string;
@@ -38,6 +42,10 @@ export default function ConferencesPage() {
   const [conferences, setConferences] = useState<Conference[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [authDialogOpen, setAuthDialogOpen] = useState(false); // State for AuthDialog
+
+  const { user, loading: authLoading } = useAuth(); // Get user status
+  const router = useRouter(); // Get router instance
 
   useEffect(() => {
     const fetchConferences = async () => {
@@ -72,6 +80,17 @@ export default function ConferencesPage() {
 
     fetchConferences();
   }, []);
+
+  const handleViewDetailsClick = (conferenceId: string) => {
+    if (!authLoading) { // Ensure auth state is resolved
+        if (user) {
+          router.push(`/conferences/${conferenceId}`);
+        } else {
+          setAuthDialogOpen(true); // Open login dialog if not logged in
+        }
+    }
+  };
+
 
   return (
     <div className="container mx-auto py-12 px-4 md:px-6">
@@ -165,11 +184,14 @@ export default function ConferencesPage() {
                        <Badge variant="secondary">{conf.rideCount ?? 'N/A'}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/conferences/${conf.id}`}>
+                      <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleViewDetailsClick(conf.id)}
+                          disabled={authLoading} // Disable button while checking auth
+                      >
                           View Details <ArrowRight className="ml-1 h-4 w-4" />
-                        </Link>
-                      </Button>
+                       </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -178,6 +200,8 @@ export default function ConferencesPage() {
           </CardContent>
         </Card>
       )}
+      {/* Auth Dialog - Rendered conditionally */}
+       <AuthDialog open={authDialogOpen} onOpenChange={setAuthDialogOpen} />
     </div>
   );
 }

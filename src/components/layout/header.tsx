@@ -8,7 +8,7 @@ export function Header() {
       <div className="container flex h-14 items-center justify-between">
         <Link href="/" className="flex items-center space-x-2">
           <Car className="h-6 w-6 text-primary" />
-          <span className="font-bold text-lg">RideSync</span>
+          <span className="font-bold text-lg">RideThere</span>
         </Link>
         <nav className="flex items-center space-x-4">
            <Link href="/conferences" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">

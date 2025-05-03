@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { collection, query, where, getDocs, Timestamp, doc, setDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, Timestamp, doc, setDoc, serverTimestamp, getDoc, addDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, PlaneArrival, PlaneDeparture, Send } from 'lucide-react';
+import { Loader2, Plane, PlaneDeparture, Send } from 'lucide-react'; // Replaced PlaneArrival with Plane
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -242,7 +242,7 @@ const RideMatches: React.FC<RideMatchesProps> = ({ conferenceId, currentUserId, 
       {/* Arrival Matches */}
       {currentUserAttendance.arrivalDateTime && (
         <div>
-          <h3 className="text-lg font-semibold mb-3 flex items-center"><PlaneArrival className="mr-2 h-5 w-5 text-primary" /> Arrival Matches ({arrivalMatches.length})</h3>
+          <h3 className="text-lg font-semibold mb-3 flex items-center"><Plane className="mr-2 h-5 w-5 text-primary" /> Arrival Matches ({arrivalMatches.length})</h3>
           {noArrivalMatches && !loading && <p className="text-muted-foreground text-sm">No attendees found arriving around your time ({formatTime(currentUserAttendance.arrivalDateTime)} at {currentUserAttendance.arrivalAirport}).</p>}
           {arrivalMatches.length > 0 && (
             <Table>

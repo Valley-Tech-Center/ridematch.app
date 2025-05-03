@@ -1,4 +1,4 @@
-# **App Name**: RideSync
+# **App Name**: RideThere
 
 ## Core Features:
 
