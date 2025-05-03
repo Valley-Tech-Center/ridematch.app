@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -12,12 +13,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useToast } from "@/hooks/use-toast";
-import { Event, Attendance, Airport } from '@/types'; // Define your types
+import { useToast } from '@/hooks/use-toast';
+import { Event, Attendance, Airport, UserProfile } from '@/types'; // Define your types
 import { format, parse } from 'date-fns';
 import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { RideMatches } from '@/components/conferences/ride-matches'; // Import the RideMatches component
+import RideMatches from '@/components/conferences/ride-matches'; // Changed to default import
 import { getAirports } from '@/services/airport';
 
 
@@ -74,14 +75,18 @@ export default function EventDetailsPage() {
     fetchEventDetails();
   }, [eventId, toast]);
 
-  // Fetch airports
+  // Fetch airports based on event city (if event exists)
   useEffect(() => {
+    if (!event?.city) return; // Only fetch if event and its city are loaded
+
     const loadAirports = async () => {
       try {
-        const fetchedAirports = await getAirports();
+        console.log(`Fetching airports for city: ${event.city}`);
+        const fetchedAirports = await getAirports(event.city); // Pass city to getAirports
+        console.log("Fetched airports:", fetchedAirports);
         setAirports(fetchedAirports);
-        // Initialize form state with a default airport if available
-        if (fetchedAirports.length > 0) {
+        // Initialize form state with a default airport if available and form state is empty
+        if (fetchedAirports.length > 0 && !formState.arrivalAirport && !formState.departureAirport) {
           setFormState(prev => ({
             ...prev,
             arrivalAirport: prev.arrivalAirport || fetchedAirports[0].code,
@@ -94,19 +99,19 @@ export default function EventDetailsPage() {
       }
     };
     loadAirports();
-  }, [toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event?.city, toast]); // Depend on event.city
 
 
   // Fetch user's attendance status and details after auth is loaded and event details are potentially fetched
   useEffect(() => {
-      if (!user || !eventId || airports.length === 0) {
-        // If user is not logged in, or eventId/airports aren't ready, set state accordingly
+      // Adjusted condition: Wait for auth, eventId. Airports might still be loading, handle default later.
+      if (!user || !eventId) {
         if (!authLoading && !user) {
-           setIsAttending(null); // Not logged in, status is N/A
-           setLoading(false); // Finish loading if auth is done and user is null
+           setIsAttending(null);
+           setLoading(false);
         }
-         // Keep loading true if eventId or airports aren't ready, or auth is still loading
-         else if (!eventId || airports.length === 0 || authLoading) {
+         else if (!eventId || authLoading) {
             setLoading(true);
          }
         return;
@@ -114,35 +119,49 @@ export default function EventDetailsPage() {
 
       setLoading(true); // Ensure loading is true while fetching attendance
 
-      const attendanceRef = doc(db, 'events', eventId, 'attendees', user.uid);
+      // --- Modified Firestore Path ---
+      // Attendance data is now stored in the top-level 'attendance' collection
+      const attendanceCollectionRef = collection(db, 'attendance');
+      // Create a query to find the specific attendance document for this user and event
+      const attendanceQuery = query(
+          attendanceCollectionRef,
+          where('userId', '==', user.uid),
+          where('eventId', '==', eventId)
+      );
 
-      // Use onSnapshot for real-time updates
-       const unsubscribe = onSnapshot(attendanceRef, (attendanceSnap) => {
+      // Use onSnapshot for real-time updates on the query result
+       const unsubscribe = onSnapshot(attendanceQuery, (querySnapshot) => {
          try {
-           if (attendanceSnap.exists()) {
+            // Since we query by userId and eventId, there should be 0 or 1 result
+           if (!querySnapshot.empty) {
+             const attendanceSnap = querySnapshot.docs[0]; // Get the first (and likely only) document
              const data = attendanceSnap.data() as Attendance;
              setAttendance(data);
              setIsAttending(data.attending);
-             // Populate form with existing data
+
+             // Populate form with existing data, use default airport if needed and airports are loaded
+             const defaultAirportCode = airports.length > 0 ? airports[0].code : '';
              setFormState({
-               arrivalAirport: data.arrivalAirport ?? airports[0]?.code ?? '',
+               arrivalAirport: data.arrivalAirport ?? defaultAirportCode,
                arrivalDate: data.arrivalDateTime?.toDate(),
                arrivalTime: data.arrivalDateTime ? format(data.arrivalDateTime.toDate(), 'HH:mm') : '',
-               departureAirport: data.departureAirport ?? airports[0]?.code ?? '',
+               departureAirport: data.departureAirport ?? defaultAirportCode,
                departureDate: data.departureDateTime?.toDate(),
                departureTime: data.departureDateTime ? format(data.departureDateTime.toDate(), 'HH:mm') : '',
              });
-             setShowMatches(!!(data.arrivalDateTime || data.departureDateTime)); // Show matches if details are saved
+             setShowMatches(!!(data.arrivalDateTime || data.departureDateTime));
            } else {
+              // No attendance record found for this user/event
              setAttendance(null);
-             setIsAttending(null); // No record exists, status is unknown, prompt user
+             setIsAttending(null);
              setShowMatches(false);
-             // Reset form state if no attendance record
+             // Reset form state, use default airport if loaded
+              const defaultAirportCode = airports.length > 0 ? airports[0].code : '';
               setFormState({
-                arrivalAirport: airports[0]?.code ?? '',
+                arrivalAirport: defaultAirportCode,
                 arrivalDate: undefined,
                 arrivalTime: '',
-                departureAirport: airports[0]?.code ?? '',
+                departureAirport: defaultAirportCode,
                 departureDate: undefined,
                 departureTime: '',
               });
@@ -150,37 +169,59 @@ export default function EventDetailsPage() {
          } catch (error) {
            console.error("Error processing attendance snapshot:", error);
            toast({ variant: "destructive", title: "Error", description: "Failed to process attendance status." });
-           setIsAttending(null); // Error state
+           setIsAttending(null);
            setShowMatches(false);
          } finally {
-           setLoading(false); // Finish loading after attendance snapshot is processed
+           // Finish loading ONLY when both event AND attendance data (or lack thereof) are processed
+           // This ensures airports list is potentially ready before render attempts
+           if (event) { // Make sure event is loaded too
+                setLoading(false);
+           }
          }
        }, (error) => {
-         // This error callback handles errors during the listen operation itself (e.g., permissions)
          console.error("Error fetching attendance:", error);
          toast({ variant: "destructive", title: "Error", description: "Failed to load your attendance status. Check permissions or network." });
-         setIsAttending(null); // Error state
+         setIsAttending(null);
          setShowMatches(false);
-         setLoading(false); // Finish loading on error
+         setLoading(false);
        });
 
 
-       // Cleanup listener on component unmount or when dependencies change
+       // Cleanup listener
        return () => unsubscribe();
 
-     }, [user, eventId, toast, airports, authLoading]); // Add authLoading
+     }, [user, eventId, toast, airports, authLoading, event]); // Added event dependency
 
 
   const handleAttendanceChange = async (attending: boolean) => {
     if (!user || !eventId) return;
 
     setIsSaving(true);
-    const attendanceRef = doc(db, 'events', eventId, 'attendees', user.uid);
+    // --- Modified Firestore Path ---
+    // We need to query for the existing doc or create a new one.
+    // It's simpler to use a consistent document ID if possible,
+    // but if not, query then update/add. Let's query first.
+    const attendanceCollectionRef = collection(db, 'attendance');
+    const q = query(attendanceCollectionRef, where('userId', '==', user.uid), where('eventId', '==', eventId));
 
     try {
+      const querySnapshot = await getDocs(q);
+      let attendanceRef;
+
+      if (querySnapshot.empty) {
+         // No existing document, create a new one (Firestore generates ID)
+         // We'll add the data directly later.
+         attendanceRef = doc(collection(db, 'attendance')); // Ref for a new doc
+      } else {
+          // Existing document found, get its reference
+          attendanceRef = querySnapshot.docs[0].ref;
+      }
+
+
       // Base data to ensure user info is always included
       const baseData = {
         userId: user.uid,
+        eventId: eventId, // Explicitly add eventId
         userName: user.displayName || user.email,
         userPhotoURL: user.photoURL,
         updatedAt: Timestamp.now(),
@@ -190,39 +231,40 @@ export default function EventDetailsPage() {
 
       if (attending) {
         // === Clicking YES ===
-        // Only save the attending status and basic info.
-        // Flight details are saved via handleDetailsSubmit.
-        // Using merge: true ensures we don't overwrite existing flight details.
         dataToSave = {
           ...baseData,
           attending: true,
         };
       } else {
         // === Clicking NO ===
-        // Save attending false and explicitly clear flight details.
         dataToSave = {
           ...baseData,
           attending: false,
-          arrivalAirport: deleteField(), // Use deleteField() or null
+          arrivalAirport: deleteField(),
           arrivalDateTime: deleteField(),
           departureAirport: deleteField(),
           departureDateTime: deleteField(),
         };
       }
 
-      await setDoc(attendanceRef, dataToSave, { merge: true });
+      // Use setDoc with the determined ref, merge if updating existing
+      await setDoc(attendanceRef, dataToSave, { merge: !querySnapshot.empty });
+
 
       // Local state updates after successful save
       setIsAttending(attending);
-      setAttendance(prev => ({ ...(prev ?? baseData), ...dataToSave })); // Update local attendance state
+      // Update local attendance state, ensuring eventId is present
+      const updatedLocalAttendance = { ...(attendance ?? {}), ...dataToSave, eventId: eventId };
+      setAttendance(updatedLocalAttendance as Attendance); // Assert type after merge
 
       // Reset form and hide matches if marking as not attending
       if (!attending) {
+        const defaultAirportCode = airports.length > 0 ? airports[0].code : '';
         setFormState({
-          arrivalAirport: airports[0]?.code ?? '',
+          arrivalAirport: defaultAirportCode,
           arrivalDate: undefined,
           arrivalTime: '',
-          departureAirport: airports[0]?.code ?? '',
+          departureAirport: defaultAirportCode,
           departureDate: undefined,
           departureTime: '',
         });
@@ -241,10 +283,13 @@ export default function EventDetailsPage() {
 
  const handleDetailsSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
      e.preventDefault();
-     if (!user || !eventId) return; // Removed isAttending check here
+     if (!user || !eventId) return;
 
      setIsSaving(true);
-     const attendanceRef = doc(db, 'events', eventId, 'attendees', user.uid);
+     // --- Modified Firestore Path ---
+     const attendanceCollectionRef = collection(db, 'attendance');
+     const q = query(attendanceCollectionRef, where('userId', '==', user.uid), where('eventId', '==', eventId));
+
 
      // Combine Date and Time into Timestamp objects
      let arrivalTimestamp: Timestamp | undefined | null = undefined;
@@ -252,7 +297,7 @@ export default function EventDetailsPage() {
        try {
          const [hours, minutes] = formState.arrivalTime.split(':').map(Number);
          const arrivalDateTime = new Date(formState.arrivalDate);
-         arrivalDateTime.setHours(hours, minutes, 0, 0); // Set hours and minutes
+         arrivalDateTime.setHours(hours, minutes, 0, 0);
          arrivalTimestamp = Timestamp.fromDate(arrivalDateTime);
        } catch (err) {
            console.error("Invalid arrival date/time format");
@@ -260,7 +305,8 @@ export default function EventDetailsPage() {
            setIsSaving(false);
            return;
        }
-     } else if (formState.arrivalDate === undefined && formState.arrivalTime === '') {
+     } else if (!formState.arrivalDate && !formState.arrivalTime) {
+         // If both date and time are empty/undefined, treat as clearing the field
          arrivalTimestamp = null; // Explicitly clearing
      }
 
@@ -269,7 +315,7 @@ export default function EventDetailsPage() {
         try {
             const [hours, minutes] = formState.departureTime.split(':').map(Number);
             const departureDateTime = new Date(formState.departureDate);
-            departureDateTime.setHours(hours, minutes, 0, 0); // Set hours and minutes
+            departureDateTime.setHours(hours, minutes, 0, 0);
             departureTimestamp = Timestamp.fromDate(departureDateTime);
         } catch (err) {
             console.error("Invalid departure date/time format");
@@ -277,54 +323,70 @@ export default function EventDetailsPage() {
             setIsSaving(false);
             return;
         }
-     } else if (formState.departureDate === undefined && formState.departureTime === '') {
+     } else if (!formState.departureDate && !formState.departureTime) {
+         // If both date and time are empty/undefined, treat as clearing the field
          departureTimestamp = null; // Explicitly clearing
      }
 
-      // Check if at least one detail is provided or if both are being cleared
-     if (!arrivalTimestamp && !departureTimestamp) {
-         // Only show error if the user *intended* to submit details but didn't provide any
-         // If both were null from the start, allow saving (marks as attending)
-         const hasExistingDetails = attendance?.arrivalDateTime || attendance?.departureDateTime;
-         if (hasExistingDetails || formState.arrivalAirport || formState.departureAirport) {
-            toast({ variant: "destructive", title: "Error", description: "Please provide either arrival or departure details (or both)." });
-            setIsSaving(false);
-            return;
-         }
-         // If no existing details and no input, proceed to mark as attending
+      // Check if at least one detail is provided (or being cleared explicitly)
+      // Allow saving even if both are null, as this might just be marking attendance
+     if (arrivalTimestamp === undefined && departureTimestamp === undefined) {
+        // If they *tried* to enter details but failed (e.g., only date, no time)
+        if ((formState.arrivalDate && !formState.arrivalTime) || (formState.departureDate && !formState.departureTime)) {
+             toast({ variant: "destructive", title: "Error", description: "Please provide both date and time for arrival/departure." });
+             setIsSaving(false);
+             return;
+        }
+        // If both sections are truly empty (not just missing time), allow proceeding
+        // This will mark them as attending without flight details.
      }
 
 
      try {
+        const querySnapshot = await getDocs(q);
+        let attendanceRef;
+        let isNewDoc = false;
+
+        if (querySnapshot.empty) {
+           attendanceRef = doc(collection(db, 'attendance')); // Ref for a new doc
+           isNewDoc = true;
+        } else {
+            attendanceRef = querySnapshot.docs[0].ref;
+        }
+
         // Base data structure including setting attending to true
         const dataToSave: Partial<Attendance> = {
             userId: user.uid,
+            eventId: eventId, // Ensure eventId is saved
             userName: user.displayName || user.email,
             userPhotoURL: user.photoURL,
             attending: true, // Saving details implies attending
-            arrivalAirport: arrivalTimestamp ? formState.arrivalAirport : deleteField(), // Use deleteField() if clearing
-            arrivalDateTime: arrivalTimestamp === null ? deleteField() : arrivalTimestamp, // Use deleteField() if clearing
-            departureAirport: departureTimestamp ? formState.departureAirport : deleteField(), // Use deleteField() if clearing
-            departureDateTime: departureTimestamp === null ? deleteField() : departureTimestamp, // Use deleteField() if clearing
+            arrivalAirport: arrivalTimestamp ? formState.arrivalAirport : (attendance?.arrivalAirport === undefined ? deleteField() : null),
+            arrivalDateTime: arrivalTimestamp === null ? deleteField() : arrivalTimestamp, // Use deleteField() for explicit clear
+            departureAirport: departureTimestamp ? formState.departureAirport : (attendance?.departureAirport === undefined ? deleteField() : null),
+            departureDateTime: departureTimestamp === null ? deleteField() : departureTimestamp, // Use deleteField() for explicit clear
             updatedAt: Timestamp.now(),
         };
 
-       // Remove undefined fields that should be deleted
-       Object.keys(dataToSave).forEach(key => {
-           if (dataToSave[key as keyof typeof dataToSave] === undefined) {
-                dataToSave[key as keyof typeof dataToSave] = deleteField();
+       // Clean up undefined values before saving, replace with deleteField() only if necessary
+       Object.keys(dataToSave).forEach(keyStr => {
+          const key = keyStr as keyof typeof dataToSave;
+           if (dataToSave[key] === undefined) {
+               // Only delete if it's not already being set to null (explicit clear)
+               if (key !== 'arrivalDateTime' && key !== 'departureDateTime') {
+                  // For airports, deleteField if undefined, otherwise keep null/value
+                  dataToSave[key] = deleteField();
+               }
+               // If arrivalTimestamp/departureTimestamp was undefined (not null), keep dataToSave field undefined for merge
+               // If it was null, dataToSave already has deleteField()
            }
        });
 
-       await setDoc(attendanceRef, dataToSave, { merge: true }); // Use merge to ensure we don't overwrite other fields unnecessarily
 
-       // Update local state based on saved data
-       // Re-fetch or update state carefully based on `dataToSave`
-       // Note: Setting state directly might be slightly out of sync if `deleteField` was used extensively
-       // The onSnapshot listener should ideally handle the update visually.
-        setIsAttending(true); // Ensure isAttending is true
-        // Let the snapshot listener update the form and showMatches state for consistency
-        // setShowMatches(!!(arrivalTimestamp || departureTimestamp)); // Show matches after saving
+       await setDoc(attendanceRef, dataToSave, { merge: !isNewDoc });
+
+       setIsAttending(true); // Ensure isAttending is true locally
+       // Let the snapshot listener update the form and showMatches state for consistency
 
        toast({ title: "Success", description: "Your travel details have been saved." });
      } catch (error) {
@@ -338,7 +400,6 @@ export default function EventDetailsPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-     // Special handling potentially needed for select if using its 'name' attribute directly
     setFormState(prev => ({ ...prev, [name]: value }));
   };
 
@@ -362,11 +423,12 @@ export default function EventDetailsPage() {
     return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
-  // Render message if event not found or user not logged in for specific actions
+  // Render message if event not found
   if (!event) {
     return <div className="text-center py-10">Event not found.</div>;
   }
 
+  // Render message if user not logged in
   if (!user) {
       return (
           <div className="container mx-auto p-4">
@@ -433,9 +495,9 @@ export default function EventDetailsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                      <Label htmlFor="arrivalAirport">Arrival Airport</Label>
-                     <Select name="arrivalAirport" value={formState.arrivalAirport} onValueChange={(value) => handleSelectChange('arrivalAirport', value)}>
+                     <Select name="arrivalAirport" value={formState.arrivalAirport || ''} onValueChange={(value) => handleSelectChange('arrivalAirport', value)} disabled={airports.length === 0}>
                          <SelectTrigger>
-                             <SelectValue placeholder="Select arrival airport" />
+                             <SelectValue placeholder={airports.length === 0 ? "Loading airports..." : "Select arrival airport"} />
                          </SelectTrigger>
                          <SelectContent>
                              {airports.map(airport => (
@@ -488,9 +550,9 @@ export default function EventDetailsPage() {
                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                      <Label htmlFor="departureAirport">Departure Airport</Label>
-                     <Select name="departureAirport" value={formState.departureAirport} onValueChange={(value) => handleSelectChange('departureAirport', value)}>
+                     <Select name="departureAirport" value={formState.departureAirport || ''} onValueChange={(value) => handleSelectChange('departureAirport', value)} disabled={airports.length === 0}>
                          <SelectTrigger>
-                             <SelectValue placeholder="Select departure airport" />
+                             <SelectValue placeholder={airports.length === 0 ? "Loading airports..." : "Select departure airport"} />
                          </SelectTrigger>
                          <SelectContent>
                              {airports.map(airport => (
@@ -546,10 +608,15 @@ export default function EventDetailsPage() {
               </form>
           )}
 
-            {/* Show Ride Matches Component - Only if attending and details have been potentially saved (showMatches is true) */}
-            {isAttending === true && showMatches && eventId && user && (
+            {/* Show Ride Matches Component - Only if attending and details have been saved (showMatches is true) and attendance is loaded */}
+            {isAttending === true && showMatches && eventId && user && attendance && (
                  <div className="pt-4 border-t">
-                      <RideMatches eventId={eventId} currentUserId={user.uid} />
+                      {/* Pass the current user's attendance details */}
+                      <RideMatches
+                            eventId={eventId}
+                            currentUserId={user.uid}
+                            currentUserAttendance={attendance}
+                       />
                  </div>
             )}
         </CardContent>
@@ -557,3 +624,4 @@ export default function EventDetailsPage() {
     </div>
   );
 }
+
