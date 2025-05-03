@@ -11,8 +11,8 @@ export function Header() {
           <span className="font-bold text-lg">RideThere</span>
         </Link>
         <nav className="flex items-center space-x-4">
-           <Link href="/conferences" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
-            Conferences
+           <Link href="/events" className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary">
+            Events
           </Link>
           {/* Add other nav links here if needed */}
           <AuthButton />

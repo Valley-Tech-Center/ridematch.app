@@ -3,7 +3,7 @@
 ## Core Features:
 
 - Dashboard Statistics: Display overall stats including rides coordinated, dollars saved, and carbon emissions avoided.
-- Conference Details and Attendance: Allow users to view upcoming conferences, indicate attendance, and enter arrival/departure flight details.
+- Event Details and Attendance: Allow users to view upcoming events, indicate attendance, and enter arrival/departure flight details.
 - Ride Matching & Notification: Match users with similar flight times (within 30 minutes) and notify potential ride-sharing partners.
 
 ## Style Guidelines:

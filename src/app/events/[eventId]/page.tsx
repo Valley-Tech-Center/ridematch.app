@@ -17,21 +17,21 @@ import { Calendar as CalendarIcon, CheckCircle, XCircle, Loader2, PlaneArrival, 
 import { Airport, getAirports } from '@/services/airport'; // Using the provided service
 import { useToast } from '@/hooks/use-toast';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import RideMatches from '@/components/conferences/ride-matches'; // Import the RideMatches component
+import RideMatches from '@/components/conferences/ride-matches'; // Corrected Import the RideMatches component path
 
-interface Conference {
+interface Event {
   id: string;
   name: string;
   city: string;
   state: string;
   startDate: Timestamp;
   endDate: Timestamp;
-  airports?: string[]; // Optional: List of relevant airport codes from conference data
+  airports?: string[]; // Optional: List of relevant airport codes from event data
 }
 
 interface Attendance {
   userId: string;
-  conferenceId: string;
+  eventId: string;
   attending: boolean;
   arrivalAirport?: string | null;
   arrivalDateTime?: Timestamp | null;
@@ -43,19 +43,19 @@ interface Attendance {
 const formatDate = (ts: Timestamp | null | undefined): string => {
   return ts ? format(ts.toDate(), 'PPP p') : 'Not set'; // PPP gives "Month d, yyyy", p gives time
 };
-const formatConferenceDate = (ts: Timestamp | null | undefined): string => {
+const formatEventDate = (ts: Timestamp | null | undefined): string => {
     return ts ? format(ts.toDate(), 'PPP') : 'N/A';
 }
 
 
-export default function ConferenceDetailPage() {
+export default function EventDetailPage() {
   const params = useParams();
-  const conferenceId = params.conferenceId as string;
+  const eventId = params.eventId as string;
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
-  const [conference, setConference] = useState<Conference | null>(null);
+  const [event, setEvent] = useState<Event | null>(null);
   const [attendance, setAttendance] = useState<Attendance | null>(null);
   const [airports, setAirports] = useState<Airport[]>([]);
   const [loading, setLoading] = useState(true);
@@ -78,20 +78,20 @@ export default function ConferenceDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showMatches, setShowMatches] = useState(false); // State to control showing matches
 
-  // Fetch conference details
+  // Fetch event details
   useEffect(() => {
-    if (!conferenceId) return;
+    if (!eventId) return;
 
-    const fetchConference = async () => {
+    const fetchEvent = async () => {
       setLoading(true);
       try {
-        const confRef = doc(db, 'conferences', conferenceId);
+        const confRef = doc(db, 'events', eventId);
         const confSnap = await getDoc(confRef);
 
         if (confSnap.exists()) {
-          const confData = { id: confSnap.id, ...confSnap.data() } as Conference;
-          setConference(confData);
-          // Fetch airports based on conference city
+          const confData = { id: confSnap.id, ...confSnap.data() } as Event;
+          setEvent(confData);
+          // Fetch airports based on event city
           const fetchedAirports = await getAirports(confData.city);
           setAirports(fetchedAirports);
           // Set default airport if available
@@ -104,32 +104,32 @@ export default function ConferenceDetailPage() {
            }
 
         } else {
-          toast({ variant: "destructive", title: "Error", description: "Conference not found." });
-          router.push('/conferences'); // Redirect if conference doesn't exist
+          toast({ variant: "destructive", title: "Error", description: "Event not found." });
+          router.push('/events'); // Redirect if event doesn't exist
         }
       } catch (error) {
-        console.error("Error fetching conference:", error);
-        toast({ variant: "destructive", title: "Error", description: "Failed to load conference details." });
+        console.error("Error fetching event:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to load event details." });
       } finally {
         // Loading is set to false after attendance is fetched
       }
     };
 
-    fetchConference();
-  }, [conferenceId, router, toast]);
+    fetchEvent();
+  }, [eventId, router, toast]);
 
 
   // Fetch user's attendance status and details
   const fetchAttendance = useCallback(async () => {
-     if (!user || !conferenceId) {
-        setIsAttending(null); // Reset if user logs out or conferenceId changes
+     if (!user || !eventId) {
+        setIsAttending(null); // Reset if user logs out or eventId changes
         setLoading(false); // Ensure loading finishes if no user
         return;
      }
 
      try {
        // Construct the document ID for the user's attendance
-       const attendanceDocId = `${user.uid}_${conferenceId}`;
+       const attendanceDocId = `${user.uid}_${eventId}`;
        const attendanceRef = doc(db, 'attendance', attendanceDocId);
        const attendanceSnap = await getDocFromServer(attendanceRef); // Use getDocFromServer for fresher data
 
@@ -170,7 +170,7 @@ export default function ConferenceDetailPage() {
      } finally {
        setLoading(false); // Finish loading after attendance is fetched
      }
-   }, [user, conferenceId, toast, airports]); // Add airports to dependency array
+   }, [user, eventId, toast, airports]); // Add airports to dependency array
 
 
     useEffect(() => {
@@ -181,12 +181,12 @@ export default function ConferenceDetailPage() {
 
 
    const handleAttendanceChange = async (attending: boolean) => {
-       if (!user || !conferenceId) return;
+       if (!user || !eventId) return;
        setIsSaving(true);
        setIsAttending(attending); // Optimistic UI update
 
         // Construct the document ID
-       const attendanceDocId = `${user.uid}_${conferenceId}`;
+       const attendanceDocId = `${user.uid}_${eventId}`;
        const attendanceRef = doc(db, 'attendance', attendanceDocId);
 
 
@@ -195,14 +195,14 @@ export default function ConferenceDetailPage() {
             // Mark as attending, keep existing details or set defaults
             const currentData = attendance || {
                 userId: user.uid,
-                conferenceId: conferenceId,
+                eventId: eventId,
                 arrivalAirport: null,
                 arrivalDateTime: null,
                 departureAirport: null,
                 departureDateTime: null,
             };
             await setDoc(attendanceRef, { ...currentData, attending: true }, { merge: true });
-            setAttendance(prev => ({...(prev || { userId: user.uid, conferenceId: conferenceId }), attending: true}));
+            setAttendance(prev => ({...(prev || { userId: user.uid, eventId: eventId }), attending: true}));
             toast({ title: "Attendance Updated", description: "You are marked as attending." });
          } else {
              // Mark as not attending, potentially clear details or just update flag
@@ -241,7 +241,7 @@ export default function ConferenceDetailPage() {
 
    const handleSaveDetails = async (event: React.FormEvent) => {
        event.preventDefault();
-       if (!user || !conferenceId || !isAttending) return;
+       if (!user || !eventId || !isAttending) return;
        setIsSaving(true);
 
        const { arrivalAirport, arrivalDate, arrivalTime, departureAirport, departureDate, departureTime } = formState;
@@ -273,7 +273,7 @@ export default function ConferenceDetailPage() {
         }
 
 
-       const attendanceDocId = `${user.uid}_${conferenceId}`;
+       const attendanceDocId = `${user.uid}_${eventId}`;
        const attendanceRef = doc(db, 'attendance', attendanceDocId);
 
        const dataToSave: Partial<Attendance> = {
@@ -286,7 +286,7 @@ export default function ConferenceDetailPage() {
 
        try {
          await setDoc(attendanceRef, dataToSave, { merge: true });
-         setAttendance(prev => ({ ...(prev || { userId: user.uid, conferenceId: conferenceId }), ...dataToSave } as Attendance));
+         setAttendance(prev => ({ ...(prev || { userId: user.uid, eventId: eventId }), ...dataToSave } as Attendance));
          toast({ title: "Success", description: "Your flight details have been saved." });
           setShowMatches(true); // Show matches after saving
        } catch (error) {
@@ -315,10 +315,10 @@ export default function ConferenceDetailPage() {
     );
   }
 
-  if (!conference) {
-    return ( // Handles case where conference fetch finished but found nothing (already handled by redirect, but good safety check)
+  if (!event) {
+    return ( // Handles case where event fetch finished but found nothing (already handled by redirect, but good safety check)
         <div className="container mx-auto py-12 px-4 md:px-6">
-             <p className="text-center text-muted-foreground">Conference not found.</p>
+             <p className="text-center text-muted-foreground">Event not found.</p>
          </div>
     );
   }
@@ -331,14 +331,14 @@ export default function ConferenceDetailPage() {
     <div className="container mx-auto py-12 px-4 md:px-6 space-y-8">
       <Card className="shadow-lg">
         <CardHeader>
-          <CardTitle className="text-3xl text-primary">{conference.name}</CardTitle>
+          <CardTitle className="text-3xl text-primary">{event.name}</CardTitle>
           <CardDescription className="flex items-center space-x-4 text-md">
-            <span><MapPin className="inline-block h-4 w-4 mr-1" />{conference.city}, {conference.state}</span>
-            <span><CalendarIcon className="inline-block h-4 w-4 mr-1" />{formatConferenceDate(conference.startDate)} - {formatConferenceDate(conference.endDate)}</span>
+            <span><MapPin className="inline-block h-4 w-4 mr-1" />{event.city}, {event.state}</span>
+            <span><CalendarIcon className="inline-block h-4 w-4 mr-1" />{formatEventDate(event.startDate)} - {formatEventDate(event.endDate)}</span>
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="mb-6">Coordinate your airport transportation with other attendees for {conference.name}.</p>
+          <p className="mb-6">Coordinate your airport transportation with other attendees for {event.name}.</p>
 
           {!user && (
             <Card className="border-dashed border-primary bg-primary/5 p-4 text-center">
@@ -381,7 +381,7 @@ export default function ConferenceDetailPage() {
                                     <AlertDialogHeader>
                                     <AlertDialogTitle>Confirm Attendance Change</AlertDialogTitle>
                                     <AlertDialogDescription>
-                                        Marking yourself as not attending will remove your saved flight details and ride matches for this conference. Are you sure?
+                                        Marking yourself as not attending will remove your saved flight details and ride matches for this event. Are you sure?
                                     </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
@@ -439,9 +439,9 @@ export default function ConferenceDetailPage() {
                                                      selected={formState.arrivalDate}
                                                      onSelect={(date) => handleFormChange('arrivalDate', date)}
                                                      initialFocus
-                                                     // Disable dates outside conference range? (Optional)
-                                                     // fromDate={conference.startDate.toDate()}
-                                                     // toDate={conference.endDate.toDate()}
+                                                     // Disable dates outside event range? (Optional)
+                                                     // fromDate={event.startDate.toDate()}
+                                                     // toDate={event.endDate.toDate()}
                                                  />
                                             </PopoverContent>
                                         </Popover>
@@ -494,8 +494,8 @@ export default function ConferenceDetailPage() {
                                                      selected={formState.departureDate}
                                                      onSelect={(date) => handleFormChange('departureDate', date)}
                                                      initialFocus
-                                                      // fromDate={conference.startDate.toDate()}
-                                                      // toDate={conference.endDate.toDate()} // Allow departure after end date?
+                                                      // fromDate={event.startDate.toDate()}
+                                                      // toDate={event.endDate.toDate()} // Allow departure after end date?
                                                  />
                                             </PopoverContent>
                                         </Popover>
@@ -547,9 +547,9 @@ export default function ConferenceDetailPage() {
                             {!canSave && <p className="text-sm text-muted-foreground mt-2">Enter and save at least one flight detail first.</p>}
                         </div>
                     )}
-                     {showMatches && attendance && conferenceId && user && (
+                     {showMatches && attendance && eventId && user && (
                          <RideMatches
-                             conferenceId={conferenceId}
+                             eventId={eventId}
                              currentUserAttendance={attendance}
                              currentUserId={user.uid}
                           />

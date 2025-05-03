@@ -14,7 +14,7 @@ const stats = {
 };
 
 // TODO: Replace with actual data fetching from Firestore
-const upcomingConferences = [
+const upcomingEvents = [
   { id: 'conf1', name: 'InnovateSphere 2024', attendees: 450, rides: 85, location: 'San Francisco, CA', date: 'Oct 15-17, 2024' },
   { id: 'conf2', name: 'DevConnect Summit', attendees: 800, rides: 120, location: 'Austin, TX', date: 'Nov 5-7, 2024' },
   { id: 'conf3', name: 'FutureTech Expo', attendees: 600, rides: 95, location: 'Miami, FL', date: 'Dec 1-3, 2024' },
@@ -27,7 +27,7 @@ export default function Home() {
       <section className="text-center mb-16">
         <h1 className="text-4xl md:text-5xl font-bold mb-4 text-primary">Welcome to RideThere</h1>
         <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-          Coordinate airport rides with fellow conference attendees. Save money, reduce emissions, and connect!
+          Coordinate airport rides with fellow event attendees. Save money, reduce emissions, and connect!
         </p>
          <Image
               src="https://picsum.photos/1200/400"
@@ -38,8 +38,8 @@ export default function Home() {
               data-ai-hint="people car sharing happy"
             />
         <Button asChild size="lg">
-          <Link href="/conferences">
-            Find Your Conference <ArrowRight className="ml-2" />
+          <Link href="/events">
+            Find Your Event <ArrowRight className="ml-2" />
           </Link>
         </Button>
       </section>
@@ -81,19 +81,19 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Upcoming Conferences Section */}
+      {/* Upcoming Events Section */}
       <section>
-        <h2 className="text-3xl font-semibold text-center mb-8">Upcoming Conferences</h2>
+        <h2 className="text-3xl font-semibold text-center mb-8">Upcoming Events</h2>
         <Card className="shadow-md">
            <CardHeader>
             <CardTitle>Find Your Event</CardTitle>
-            <CardDescription>Browse upcoming conferences and start coordinating your rides.</CardDescription>
+            <CardDescription>Browse upcoming events and start coordinating your rides.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Conference</TableHead>
+                  <TableHead>Event</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-right">Attendees</TableHead>
@@ -102,7 +102,7 @@ export default function Home() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {upcomingConferences.map((conf) => (
+                {upcomingEvents.map((conf) => (
                   <TableRow key={conf.id}>
                     <TableCell className="font-medium">{conf.name}</TableCell>
                     <TableCell>{conf.location}</TableCell>
@@ -113,7 +113,7 @@ export default function Home() {
                     </TableCell>
                     <TableCell className="text-right">
                       <Button asChild variant="outline" size="sm">
-                        <Link href={`/conferences/${conf.id}`}>
+                        <Link href={`/events/${conf.id}`}>
                           View Details <ArrowRight className="ml-1 h-4 w-4" />
                         </Link>
                       </Button>

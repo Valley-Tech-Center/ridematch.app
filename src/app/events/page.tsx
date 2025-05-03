@@ -16,7 +16,7 @@ import { useAuth } from '@/context/auth-context'; // Import useAuth
 import { useRouter } from 'next/navigation'; // Import useRouter
 import { AuthDialog } from '@/components/auth/auth-dialog'; // Import AuthDialog
 
-interface Conference {
+interface Event {
   id: string;
   name: string;
   city: string;
@@ -38,8 +38,8 @@ const formatDateRange = (start: Timestamp, end: Timestamp): string => {
 };
 
 
-export default function ConferencesPage() {
-  const [conferences, setConferences] = useState<Conference[]>([]);
+export default function EventsPage() {
+  const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [authDialogOpen, setAuthDialogOpen] = useState(false); // State for AuthDialog
@@ -48,13 +48,13 @@ export default function ConferencesPage() {
   const router = useRouter(); // Get router instance
 
   useEffect(() => {
-    const fetchConferences = async () => {
+    const fetchEvents = async () => {
       setLoading(true);
       setError(null);
       try {
-        const conferencesRef = collection(db, 'conferences');
+        const eventsRef = collection(db, 'events');
         // Order by start date, upcoming first
-        const q = query(conferencesRef, orderBy('startDate', 'asc'));
+        const q = query(eventsRef, orderBy('startDate', 'asc'));
         const querySnapshot = await getDocs(q);
         const confsData = querySnapshot.docs.map(doc => ({
           id: doc.id,
@@ -62,29 +62,29 @@ export default function ConferencesPage() {
            // Placeholder counts - these would ideally come from aggregated data
            attendeeCount: Math.floor(Math.random() * 500) + 100, // Random placeholder
            rideCount: Math.floor(Math.random() * 50) + 10, // Random placeholder
-        } as Conference));
+        } as Event));
 
-         // Filter out past conferences (optional, based on requirements)
+         // Filter out past events (optional, based on requirements)
          const now = Timestamp.now();
-         const upcomingConfs = confsData.filter(conf => conf.endDate.seconds >= now.seconds);
+         const upcomingEvents = confsData.filter(conf => conf.endDate.seconds >= now.seconds);
 
 
-        setConferences(upcomingConfs);
+        setEvents(upcomingEvents);
       } catch (err) {
-        console.error("Error fetching conferences:", err);
-        setError("Failed to load conferences. Please try again later.");
+        console.error("Error fetching events:", err);
+        setError("Failed to load events. Please try again later.");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchConferences();
+    fetchEvents();
   }, []);
 
-  const handleViewDetailsClick = (conferenceId: string) => {
+  const handleViewDetailsClick = (eventId: string) => {
     if (!authLoading) { // Ensure auth state is resolved
         if (user) {
-          router.push(`/conferences/${conferenceId}`);
+          router.push(`/events/${eventId}`);
         } else {
           setAuthDialogOpen(true); // Open login dialog if not logged in
         }
@@ -94,7 +94,7 @@ export default function ConferencesPage() {
 
   return (
     <div className="container mx-auto py-12 px-4 md:px-6">
-      <h1 className="text-3xl md:text-4xl font-bold mb-8 text-center text-primary">Upcoming Conferences</h1>
+      <h1 className="text-3xl md:text-4xl font-bold mb-8 text-center text-primary">Upcoming Events</h1>
 
        {loading && (
          <Card className="shadow-md">
@@ -134,7 +134,7 @@ export default function ConferencesPage() {
       {!loading && error && (
         <Card className="shadow-md border-destructive bg-destructive/10">
           <CardHeader>
-            <CardTitle className="text-destructive">Error Loading Conferences</CardTitle>
+            <CardTitle className="text-destructive">Error Loading Events</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-destructive-foreground">{error}</p>
@@ -143,29 +143,29 @@ export default function ConferencesPage() {
         </Card>
       )}
 
-       {!loading && !error && conferences.length === 0 && (
+       {!loading && !error && events.length === 0 && (
          <Card className="shadow-md">
            <CardHeader>
-             <CardTitle>No Upcoming Conferences</CardTitle>
+             <CardTitle>No Upcoming Events</CardTitle>
            </CardHeader>
            <CardContent>
-             <p className="text-muted-foreground">There are currently no upcoming conferences listed. Check back later!</p>
+             <p className="text-muted-foreground">There are currently no upcoming events listed. Check back later!</p>
            </CardContent>
          </Card>
        )}
 
 
-      {!loading && !error && conferences.length > 0 && (
+      {!loading && !error && events.length > 0 && (
         <Card className="shadow-md">
           <CardHeader>
             <CardTitle>Find Your Event</CardTitle>
-            <CardDescription>Browse upcoming conferences and start coordinating your rides.</CardDescription>
+            <CardDescription>Browse upcoming events and start coordinating your rides.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Conference</TableHead>
+                  <TableHead>Event</TableHead>
                   <TableHead><MapPin className="inline-block h-4 w-4 mr-1" />Location</TableHead>
                   <TableHead><Calendar className="inline-block h-4 w-4 mr-1" />Date</TableHead>
                    <TableHead className="text-right"><Users className="inline-block h-4 w-4 mr-1" />Attendees</TableHead>
@@ -174,7 +174,7 @@ export default function ConferencesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {conferences.map((conf) => (
+                {events.map((conf) => (
                   <TableRow key={conf.id}>
                     <TableCell className="font-medium">{conf.name}</TableCell>
                     <TableCell>{conf.city}, {conf.state}</TableCell>

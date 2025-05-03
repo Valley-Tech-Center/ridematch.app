@@ -10,7 +10,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
   title: 'RideThere', // Updated title
-  description: 'Coordinate rides for conferences', // Updated description
+  description: 'Coordinate rides for events', // Updated description
 };
 
 export default function RootLayout({

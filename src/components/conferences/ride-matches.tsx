@@ -13,7 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface Attendance {
   userId: string;
-  conferenceId: string;
+  eventId: string;
   attending: boolean;
   arrivalAirport?: string | null;
   arrivalDateTime?: Timestamp | null;
@@ -33,7 +33,7 @@ interface RideMatch extends Attendance {
 }
 
 interface RideMatchesProps {
-  conferenceId: string;
+  eventId: string;
   currentUserId: string;
   currentUserAttendance: Attendance;
 }
@@ -54,7 +54,7 @@ const getInitials = (name?: string | null) => {
   return `${names[0][0]}${names[names.length - 1][0]}`.toUpperCase();
 };
 
-const RideMatches: React.FC<RideMatchesProps> = ({ conferenceId, currentUserId, currentUserAttendance }) => {
+const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, currentUserAttendance }) => {
   const [arrivalMatches, setArrivalMatches] = useState<RideMatch[]>([]);
   const [departureMatches, setDepartureMatches] = useState<RideMatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +80,7 @@ const RideMatches: React.FC<RideMatchesProps> = ({ conferenceId, currentUserId, 
       const attendanceRef = collection(db, 'attendance');
       const baseQuery = query(
         attendanceRef,
-        where('conferenceId', '==', conferenceId),
+        where('eventId', '==', eventId),
         where('attending', '==', true),
         where('userId', '!=', currentUserId) // Exclude self
       );
@@ -172,7 +172,7 @@ const RideMatches: React.FC<RideMatchesProps> = ({ conferenceId, currentUserId, 
     } finally {
       setLoading(false);
     }
-  }, [conferenceId, currentUserId, currentUserAttendance]); // Include currentUserAttendance
+  }, [eventId, currentUserId, currentUserAttendance]); // Include currentUserAttendance
 
   useEffect(() => {
     fetchMatches();
@@ -187,7 +187,7 @@ const RideMatches: React.FC<RideMatchesProps> = ({ conferenceId, currentUserId, 
     const notificationData = {
       senderId: currentUserId,
       recipientId: recipientId,
-      conferenceId: conferenceId,
+      eventId: eventId,
       type: type, // 'arrival' or 'departure'
       senderArrivalDateTime: currentUserAttendance.arrivalDateTime || null,
       senderDepartureDateTime: currentUserAttendance.departureDateTime || null,
