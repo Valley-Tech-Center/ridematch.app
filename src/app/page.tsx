@@ -6,19 +6,14 @@ import Link from 'next/link';
 import { ArrowRight, Car, DollarSign, Leaf } from "lucide-react";
 import Image from 'next/image';
 
-// TODO: Replace with actual data fetching from Firestore
+// TODO: Replace stats with actual data fetching from Firestore aggregations if possible
 const stats = {
   ridesCoordinated: 1250,
-  dollarsSaved: 1250 * 50,
-  carbonAvoided: 1250 * 15, // Assuming 15kg CO2 per avoided ride
+  dollarsSaved: 1250 * 50, // Simple estimation
+  carbonAvoided: 1250 * 15, // Simple estimation (Assuming 15kg CO2 per avoided ride)
 };
 
-// TODO: Replace with actual data fetching from Firestore
-const upcomingEvents = [
-  { id: 'conf1', name: 'InnovateSphere 2024', attendees: 450, rides: 85, location: 'San Francisco, CA', date: 'Oct 15-17, 2024' },
-  { id: 'conf2', name: 'DevConnect Summit', attendees: 800, rides: 120, location: 'Austin, TX', date: 'Nov 5-7, 2024' },
-  { id: 'conf3', name: 'FutureTech Expo', attendees: 600, rides: 95, location: 'Miami, FL', date: 'Dec 1-3, 2024' },
-];
+// Removed upcomingEvents mock data, as it's fetched on the /events page
 
 export default function Home() {
   return (
@@ -34,8 +29,9 @@ export default function Home() {
               alt="People sharing a ride"
               width={1200}
               height={400}
-              className="rounded-lg shadow-md mx-auto mb-8"
+              className="rounded-lg shadow-md mx-auto mb-8 object-cover" // Added object-cover
               data-ai-hint="people car sharing happy"
+              priority // Add priority for LCP image
             />
         <Button asChild size="lg">
           <Link href="/events">
@@ -60,12 +56,12 @@ export default function Home() {
           </Card>
           <Card className="shadow-md hover:shadow-lg transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Est. Dollars Saved</CardTitle>
+              <CardTitle className="text-sm font-medium">Est. Savings</CardTitle> {/* Changed label */}
               <DollarSign className="h-5 w-5 text-accent" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">${stats.dollarsSaved.toLocaleString()}</div>
-              <p className="text-xs text-muted-foreground">Keeping money in your pocket</p>
+              <p className="text-xs text-muted-foreground">Keeping money in attendees' pockets</p> {/* Updated text */}
             </CardContent>
           </Card>
           <Card className="shadow-md hover:shadow-lg transition-shadow">
@@ -81,49 +77,46 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Upcoming Events Section */}
-      <section>
-        <h2 className="text-3xl font-semibold text-center mb-8">Upcoming Events</h2>
-        <Card className="shadow-md">
-           <CardHeader>
-            <CardTitle>Find Your Event</CardTitle>
-            <CardDescription>Browse upcoming events and start coordinating your rides.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Event</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead className="text-right">Attendees</TableHead>
-                  <TableHead className="text-right">Rides So Far</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {upcomingEvents.map((conf) => (
-                  <TableRow key={conf.id}>
-                    <TableCell className="font-medium">{conf.name}</TableCell>
-                    <TableCell>{conf.location}</TableCell>
-                     <TableCell>{conf.date}</TableCell>
-                    <TableCell className="text-right">{conf.attendees}</TableCell>
-                    <TableCell className="text-right">
-                      <Badge variant="secondary">{conf.rides}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/events/${conf.id}`}>
-                          View Details <ArrowRight className="ml-1 h-4 w-4" />
-                        </Link>
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+      {/* How it Works Section (Optional Addition) */}
+      <section className="mb-16 bg-secondary/50 py-12 rounded-lg px-6">
+          <h2 className="text-3xl font-semibold text-center mb-8">How It Works</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+              <div>
+                  <span className="inline-block p-3 bg-primary text-primary-foreground rounded-full mb-3">
+                      <span className="text-xl font-bold">1</span>
+                  </span>
+                  <h3 className="text-xl font-semibold mb-2">Find Your Event</h3>
+                  <p className="text-muted-foreground">Browse the list of upcoming events and select yours.</p>
+              </div>
+              <div>
+                  <span className="inline-block p-3 bg-primary text-primary-foreground rounded-full mb-3">
+                       <span className="text-xl font-bold">2</span>
+                  </span>
+                  <h3 className="text-xl font-semibold mb-2">Share Your Flights</h3>
+                  <p className="text-muted-foreground">Enter your arrival and departure details securely.</p>
+              </div>
+              <div>
+                   <span className="inline-block p-3 bg-primary text-primary-foreground rounded-full mb-3">
+                       <span className="text-xl font-bold">3</span>
+                   </span>
+                  <h3 className="text-xl font-semibold mb-2">Match & Connect</h3>
+                  <p className="text-muted-foreground">See who's traveling around the same time and coordinate a shared ride.</p>
+              </div>
+          </div>
+      </section>
+
+
+      {/* Call to Action / Events Link Section */}
+      <section className="text-center">
+        <h2 className="text-3xl font-semibold mb-4">Ready to Coordinate?</h2>
+        <p className="text-lg text-muted-foreground mb-8">
+          Find your event and start connecting with fellow attendees today.
+        </p>
+        <Button asChild size="lg">
+          <Link href="/events">
+            Browse Events <ArrowRight className="ml-2" />
+          </Link>
+        </Button>
       </section>
     </div>
   );

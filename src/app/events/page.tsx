@@ -2,19 +2,20 @@
 "use client"; // This component uses hooks
 
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, Timestamp, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from 'next/link';
-import { ArrowRight, Calendar, MapPin, Users, Car } from "lucide-react";
+import { ArrowRight, Calendar, MapPin, Users, Car, Loader2 } from "lucide-react"; // Added Loader2
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns'; // For date formatting
 import { useAuth } from '@/context/auth-context'; // Import useAuth
 import { useRouter } from 'next/navigation'; // Import useRouter
 import { AuthDialog } from '@/components/auth/auth-dialog'; // Import AuthDialog
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // Added Alert components
 
 interface Event {
   id: string;
@@ -23,18 +24,24 @@ interface Event {
   state: string;
   startDate: Timestamp;
   endDate: Timestamp;
-  // TODO: Add fields for attendee count and rides coordinated (these might need aggregation)
-   attendeeCount?: number; // Placeholder
-   rideCount?: number; // Placeholder
+  // Removed placeholder counts as they should come from real data/aggregation
+  // attendeeCount?: number;
+  // rideCount?: number;
 }
 
 // Helper to format Firestore Timestamps
 const formatDateRange = (start: Timestamp, end: Timestamp): string => {
   const startDate = start.toDate();
   const endDate = end.toDate();
-  const startFormat = format(startDate, 'MMM d');
-  const endFormat = format(endDate, 'd, yyyy');
-  return `${startFormat}-${endFormat}`;
+  // Handle cases where dates might be invalid before formatting
+  try {
+      const startFormat = format(startDate, 'MMM d');
+      const endFormat = format(endDate, 'd, yyyy');
+      return `${startFormat}-${endFormat}`;
+  } catch (e) {
+      console.error("Error formatting date range:", e);
+      return "Invalid Date Range";
+  }
 };
 
 
@@ -47,29 +54,30 @@ export default function EventsPage() {
   const { user, loading: authLoading } = useAuth(); // Get user status
   const router = useRouter(); // Get router instance
 
-  useEffect(() => {
-    const fetchEvents = async () => {
+  const fetchEvents = async () => {
       setLoading(true);
       setError(null);
       try {
         const eventsRef = collection(db, 'events');
         // Order by start date, upcoming first
-        const q = query(eventsRef, orderBy('startDate', 'asc'));
+        // Filter out past events using Firestore query
+        const now = Timestamp.now();
+        const q = query(
+            eventsRef,
+            where('endDate', '>=', now), // Only show events ending today or later
+            orderBy('endDate', 'asc'), // Order by end date first (to show soonest ending first?) or startDate?
+            orderBy('startDate', 'asc') // Then order by start date
+        );
         const querySnapshot = await getDocs(q);
-        const confsData = querySnapshot.docs.map(doc => ({
+        const eventsData = querySnapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
-           // Placeholder counts - these would ideally come from aggregated data
-           attendeeCount: Math.floor(Math.random() * 500) + 100, // Random placeholder
-           rideCount: Math.floor(Math.random() * 50) + 10, // Random placeholder
         } as Event));
 
-         // Filter out past events (optional, based on requirements)
-         const now = Timestamp.now();
-         const upcomingEvents = confsData.filter(conf => conf.endDate.seconds >= now.seconds);
+        // No need to filter in JS if Firestore query handles it
+        // const upcomingEvents = eventsData; // Already filtered by query
 
-
-        setEvents(upcomingEvents);
+        setEvents(eventsData);
       } catch (err) {
         console.error("Error fetching events:", err);
         setError("Failed to load events. Please try again later.");
@@ -78,6 +86,7 @@ export default function EventsPage() {
       }
     };
 
+  useEffect(() => {
     fetchEvents();
   }, []);
 
@@ -97,54 +106,58 @@ export default function EventsPage() {
       <h1 className="text-3xl md:text-4xl font-bold mb-8 text-center text-primary">Upcoming Events</h1>
 
        {loading && (
-         <Card className="shadow-md">
-            <CardHeader>
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-4 w-64 mt-1" />
-            </CardHeader>
-           <CardContent>
-             <Table>
-               <TableHeader>
-                 <TableRow>
-                    <TableHead><Skeleton className="h-5 w-32" /></TableHead>
-                    <TableHead><Skeleton className="h-5 w-24" /></TableHead>
-                    <TableHead><Skeleton className="h-5 w-40" /></TableHead>
-                    <TableHead className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableHead>
-                    <TableHead className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableHead>
-                    <TableHead><Skeleton className="h-8 w-24 ml-auto" /></TableHead>
-                 </TableRow>
-               </TableHeader>
-               <TableBody>
-                 {[...Array(3)].map((_, i) => (
-                   <TableRow key={`skel-${i}`}>
-                     <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                     <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                     <TableCell><Skeleton className="h-5 w-36" /></TableCell>
-                     <TableCell className="text-right"><Skeleton className="h-5 w-12 ml-auto" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-5 w-10 ml-auto" /></TableCell>
-                     <TableCell className="text-right"><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
-                   </TableRow>
-                 ))}
-               </TableBody>
-             </Table>
-           </CardContent>
-         </Card>
+         <div className="flex justify-center items-center py-10">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            <span className="ml-3 text-lg text-muted-foreground">Loading Events...</span>
+         </div>
+        //  <Card className="shadow-md">
+        //     <CardHeader>
+        //       <Skeleton className="h-6 w-48" />
+        //       <Skeleton className="h-4 w-64 mt-1" />
+        //     </CardHeader>
+        //    <CardContent>
+        //      <Table>
+        //        <TableHeader>
+        //          <TableRow>
+        //             <TableHead><Skeleton className="h-5 w-32" /></TableHead>
+        //             <TableHead><Skeleton className="h-5 w-24" /></TableHead>
+        //             <TableHead><Skeleton className="h-5 w-40" /></TableHead>
+        //             {/* <TableHead className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableHead>
+        //             <TableHead className="text-right"><Skeleton className="h-5 w-20 ml-auto" /></TableHead> */}
+        //             <TableHead className="text-right"><Skeleton className="h-8 w-24 ml-auto" /></TableHead>
+        //          </TableRow>
+        //        </TableHeader>
+        //        <TableBody>
+        //          {[...Array(3)].map((_, i) => (
+        //            <TableRow key={`skel-${i}`}>
+        //              <TableCell><Skeleton className="h-5 w-40" /></TableCell>
+        //              <TableCell><Skeleton className="h-5 w-28" /></TableCell>
+        //              <TableCell><Skeleton className="h-5 w-36" /></TableCell>
+        //              {/* <TableCell className="text-right"><Skeleton className="h-5 w-12 ml-auto" /></TableCell>
+        //               <TableCell className="text-right"><Skeleton className="h-5 w-10 ml-auto" /></TableCell> */}
+        //              <TableCell className="text-right"><Skeleton className="h-8 w-24 ml-auto" /></TableCell>
+        //            </TableRow>
+        //          ))}
+        //        </TableBody>
+        //      </Table>
+        //    </CardContent>
+        //  </Card>
        )}
 
       {!loading && error && (
-        <Card className="shadow-md border-destructive bg-destructive/10">
-          <CardHeader>
-            <CardTitle className="text-destructive">Error Loading Events</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-destructive-foreground">{error}</p>
-             <Button onClick={() => window.location.reload()} variant="destructive" className="mt-4">Retry</Button>
-          </CardContent>
-        </Card>
+        <Alert variant="destructive" className="max-w-lg mx-auto">
+          <AlertTitle>Error Loading Events</AlertTitle>
+          <AlertDescription>
+            {error}
+            <Button onClick={fetchEvents} variant="destructive" size="sm" className="mt-3 ml-4">
+              Retry
+            </Button>
+          </AlertDescription>
+        </Alert>
       )}
 
        {!loading && !error && events.length === 0 && (
-         <Card className="shadow-md">
+         <Card className="shadow-md max-w-lg mx-auto">
            <CardHeader>
              <CardTitle>No Upcoming Events</CardTitle>
            </CardHeader>
@@ -159,7 +172,7 @@ export default function EventsPage() {
         <Card className="shadow-md">
           <CardHeader>
             <CardTitle>Find Your Event</CardTitle>
-            <CardDescription>Browse upcoming events and start coordinating your rides.</CardDescription>
+            <CardDescription>Browse upcoming events and coordinate your rides.</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
@@ -168,28 +181,29 @@ export default function EventsPage() {
                   <TableHead>Event</TableHead>
                   <TableHead><MapPin className="inline-block h-4 w-4 mr-1" />Location</TableHead>
                   <TableHead><Calendar className="inline-block h-4 w-4 mr-1" />Date</TableHead>
-                   <TableHead className="text-right"><Users className="inline-block h-4 w-4 mr-1" />Attendees</TableHead>
-                   <TableHead className="text-right"><Car className="inline-block h-4 w-4 mr-1" />Rides</TableHead>
-                  <TableHead></TableHead>
+                   {/* <TableHead className="text-right"><Users className="inline-block h-4 w-4 mr-1" />Attendees</TableHead>
+                   <TableHead className="text-right"><Car className="inline-block h-4 w-4 mr-1" />Rides</TableHead> */}
+                  <TableHead className="text-right"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {events.map((conf) => (
-                  <TableRow key={conf.id}>
-                    <TableCell className="font-medium">{conf.name}</TableCell>
-                    <TableCell>{conf.city}, {conf.state}</TableCell>
-                    <TableCell>{formatDateRange(conf.startDate, conf.endDate)}</TableCell>
-                     <TableCell className="text-right">{conf.attendeeCount ?? 'N/A'}</TableCell>
+                {events.map((event) => (
+                  <TableRow key={event.id}>
+                    <TableCell className="font-medium">{event.name}</TableCell>
+                    <TableCell>{event.city}, {event.state}</TableCell>
+                    <TableCell>{formatDateRange(event.startDate, event.endDate)}</TableCell>
+                     {/* <TableCell className="text-right">{event.attendeeCount ?? 'N/A'}</TableCell>
                     <TableCell className="text-right">
-                       <Badge variant="secondary">{conf.rideCount ?? 'N/A'}</Badge>
-                    </TableCell>
+                       <Badge variant="secondary">{event.rideCount ?? 'N/A'}</Badge>
+                    </TableCell> */}
                     <TableCell className="text-right">
                       <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleViewDetailsClick(conf.id)}
+                          onClick={() => handleViewDetailsClick(event.id)}
                           disabled={authLoading} // Disable button while checking auth
                       >
+                          {authLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                           View Details <ArrowRight className="ml-1 h-4 w-4" />
                        </Button>
                     </TableCell>
@@ -205,3 +219,4 @@ export default function EventsPage() {
     </div>
   );
 }
+
