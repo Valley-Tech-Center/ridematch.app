@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase/config';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Loader2, Plane, PlaneDeparture, Send } from 'lucide-react'; // Replaced PlaneArrival with Plane
+import { Loader2, Plane, PlaneTakeoff, Send } from 'lucide-react'; // Replaced PlaneDeparture with PlaneTakeoff
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -287,7 +287,7 @@ const RideMatches: React.FC<RideMatchesProps> = ({ conferenceId, currentUserId, 
       {/* Departure Matches */}
       {currentUserAttendance.departureDateTime && (
         <div>
-          <h3 className="text-lg font-semibold mb-3 flex items-center"><PlaneDeparture className="mr-2 h-5 w-5 text-primary" /> Departure Matches ({departureMatches.length})</h3>
+          <h3 className="text-lg font-semibold mb-3 flex items-center"><PlaneTakeoff className="mr-2 h-5 w-5 text-primary" /> Departure Matches ({departureMatches.length})</h3>
           {noDepartureMatches && !loading && <p className="text-muted-foreground text-sm">No attendees found departing around your time ({formatTime(currentUserAttendance.departureDateTime)} from {currentUserAttendance.departureAirport}).</p>}
           {departureMatches.length > 0 && (
             <Table>
