@@ -1,0 +1,24 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow public read access to the events collection
+    match /events/{eventId} {
+      allow read: if true;
+      // You might want to restrict event creation/modification
+      // allow write: if request.auth != null; // Example: only logged-in users
+
+      // Rules for the 'attendees' subcollection
+      match /attendees/{userId} {
+        // Allow authenticated users to read/write their own attendance record
+        allow get, write: if request.auth != null && request.auth.uid == userId;
+        // Optionally, allow listing attendees only for logged-in users?
+        allow list: if request.auth != null;
+      }
+    }
+
+    // Allow users to read and write their own profile data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

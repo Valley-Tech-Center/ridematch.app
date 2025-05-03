@@ -31,9 +31,9 @@ export async function getAirports(city: string): Promise<Airport[]> {
       city: 'San Francisco',
     },
     {
-      code: 'JFK',
-      name: 'John F. Kennedy International Airport',
-      city: 'New York',
+      code: 'SJC',
+      name: 'Norman Y. Mineta San Jose International Airport',
+      city: 'San Jose',
     },
   ];
 }

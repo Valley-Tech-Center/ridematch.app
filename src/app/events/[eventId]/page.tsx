@@ -1,65 +1,37 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { doc, getDoc, setDoc, getDocFromServer, Timestamp, collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase/config';
+import { useState, useEffect, useCallback } from 'react';
+import { useParams } from 'next/navigation';
+import { doc, getDoc, setDoc, getDocs, collection, Timestamp, query, where, onSnapshot, deleteField } from 'firebase/firestore'; // Import deleteField
+import { db, auth } from '@/lib/firebase/config';
 import { useAuth } from '@/context/auth-context';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format } from "date-fns";
-import { Calendar as CalendarIcon, CheckCircle, XCircle, Loader2, PlaneArrival, PlaneDeparture, Users, MapPin, Car } from "lucide-react";
-import { Airport, getAirports } from '@/services/airport'; // Using the provided service
-import { useToast } from '@/hooks/use-toast';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import RideMatches from '@/components/conferences/ride-matches'; // Corrected Import the RideMatches component path
-
-interface Event {
-  id: string;
-  name: string;
-  city: string;
-  state: string;
-  startDate: Timestamp;
-  endDate: Timestamp;
-  airports?: string[]; // Optional: List of relevant airport codes from event data
-}
-
-interface Attendance {
-  userId: string;
-  eventId: string;
-  attending: boolean;
-  arrivalAirport?: string | null;
-  arrivalDateTime?: Timestamp | null;
-  departureAirport?: string | null;
-  departureDateTime?: Timestamp | null;
-}
-
-// Helper to format Firestore Timestamps
-const formatDate = (ts: Timestamp | null | undefined): string => {
-  return ts ? format(ts.toDate(), 'PPP p') : 'Not set'; // PPP gives "Month d, yyyy", p gives time
-};
-const formatEventDate = (ts: Timestamp | null | undefined): string => {
-    return ts ? format(ts.toDate(), 'PPP') : 'N/A';
-}
+import { useToast } from "@/hooks/use-toast";
+import { Event, Attendance, Airport } from '@/types'; // Define your types
+import { format, parse } from 'date-fns';
+import { Calendar as CalendarIcon, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { RideMatches } from '@/components/conferences/ride-matches'; // Import the RideMatches component
+import { getAirports } from '@/services/airport';
 
 
-export default function EventDetailPage() {
+export default function EventDetailsPage() {
   const params = useParams();
   const eventId = params.eventId as string;
-  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const [event, setEvent] = useState<Event | null>(null);
   const [attendance, setAttendance] = useState<Attendance | null>(null);
   const [airports, setAirports] = useState<Airport[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [isAttending, setIsAttending] = useState<boolean | null>(null); // null = loading, false = not attending, true = attending
+  const [loading, setLoading] = useState(true); // Overall loading state for the page
+  const [isAttending, setIsAttending] = useState<boolean | null>(null); // null = loading/unknown, false = not attending, true = attending
   const [formState, setFormState] = useState<{
     arrivalAirport: string;
     arrivalDate: Date | undefined;
@@ -78,486 +50,510 @@ export default function EventDetailPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [showMatches, setShowMatches] = useState(false); // State to control showing matches
 
+
   // Fetch event details
   useEffect(() => {
     if (!eventId) return;
-
-    const fetchEvent = async () => {
-      setLoading(true);
+    setLoading(true); // Start loading when fetching event details
+    const fetchEventDetails = async () => {
+      const eventRef = doc(db, 'events', eventId);
       try {
-        const confRef = doc(db, 'events', eventId);
-        const confSnap = await getDoc(confRef);
-
-        if (confSnap.exists()) {
-          const confData = { id: confSnap.id, ...confSnap.data() } as Event;
-          setEvent(confData);
-          // Fetch airports based on event city
-          const fetchedAirports = await getAirports(confData.city);
-          setAirports(fetchedAirports);
-          // Set default airport if available
-           if (fetchedAirports.length > 0) {
-             setFormState(prev => ({
-                ...prev,
-                arrivalAirport: confData.airports?.[0] ?? fetchedAirports[0].code,
-                departureAirport: confData.airports?.[0] ?? fetchedAirports[0].code,
-             }));
-           }
-
+        const docSnap = await getDoc(eventRef);
+        if (docSnap.exists()) {
+          const eventData = docSnap.data() as Event;
+          setEvent({ ...eventData, id: docSnap.id }); // Set event data
         } else {
           toast({ variant: "destructive", title: "Error", description: "Event not found." });
-          router.push('/events'); // Redirect if event doesn't exist
         }
       } catch (error) {
-        console.error("Error fetching event:", error);
+        console.error("Error fetching event details:", error);
         toast({ variant: "destructive", title: "Error", description: "Failed to load event details." });
-      } finally {
-        // Loading is set to false after attendance is fetched
+      }
+      // Don't set loading false here yet, wait for attendance data
+    };
+    fetchEventDetails();
+  }, [eventId, toast]);
+
+  // Fetch airports
+  useEffect(() => {
+    const loadAirports = async () => {
+      try {
+        const fetchedAirports = await getAirports();
+        setAirports(fetchedAirports);
+        // Initialize form state with a default airport if available
+        if (fetchedAirports.length > 0) {
+          setFormState(prev => ({
+            ...prev,
+            arrivalAirport: prev.arrivalAirport || fetchedAirports[0].code,
+            departureAirport: prev.departureAirport || fetchedAirports[0].code,
+          }));
+        }
+      } catch (error) {
+        console.error("Error fetching airports:", error);
+        toast({ variant: "destructive", title: "Error", description: "Failed to load airport data." });
       }
     };
-
-    fetchEvent();
-  }, [eventId, router, toast]);
-
-
-  // Fetch user's attendance status and details
-  const fetchAttendance = useCallback(async () => {
-     if (!user || !eventId) {
-        setIsAttending(null); // Reset if user logs out or eventId changes
-        setLoading(false); // Ensure loading finishes if no user
-        return;
-     }
-
-     try {
-       // Construct the document ID for the user's attendance
-       const attendanceDocId = `${user.uid}_${eventId}`;
-       const attendanceRef = doc(db, 'attendance', attendanceDocId);
-       const attendanceSnap = await getDocFromServer(attendanceRef); // Use getDocFromServer for fresher data
+    loadAirports();
+  }, [toast]);
 
 
-       if (attendanceSnap.exists()) {
-         const data = attendanceSnap.data() as Attendance;
-         setAttendance(data);
-         setIsAttending(data.attending);
-         // Populate form with existing data
-         setFormState({
-           arrivalAirport: data.arrivalAirport ?? airports[0]?.code ?? '',
-           arrivalDate: data.arrivalDateTime?.toDate(),
-           arrivalTime: data.arrivalDateTime ? format(data.arrivalDateTime.toDate(), 'HH:mm') : '',
-           departureAirport: data.departureAirport ?? airports[0]?.code ?? '',
-           departureDate: data.departureDateTime?.toDate(),
-           departureTime: data.departureDateTime ? format(data.departureDateTime.toDate(), 'HH:mm') : '',
-         });
-         setShowMatches(!!(data.arrivalDateTime || data.departureDateTime)); // Show matches if details are saved
-       } else {
-         setAttendance(null);
-         setIsAttending(false); // Assume not attending if no record exists
-         setShowMatches(false);
-         // Reset form state if no attendance record
-          setFormState({
-            arrivalAirport: airports[0]?.code ?? '',
-            arrivalDate: undefined,
-            arrivalTime: '',
-            departureAirport: airports[0]?.code ?? '',
-            departureDate: undefined,
-            departureTime: '',
-          });
-       }
-     } catch (error) {
-       console.error("Error fetching attendance:", error);
-       toast({ variant: "destructive", title: "Error", description: "Failed to load your attendance status." });
-       setIsAttending(null); // Error state
-       setShowMatches(false);
-     } finally {
-       setLoading(false); // Finish loading after attendance is fetched
-     }
-   }, [user, eventId, toast, airports]); // Add airports to dependency array
-
-
-    useEffect(() => {
-      if (!authLoading) { // Only fetch attendance once auth status is confirmed
-          fetchAttendance();
-      }
-    }, [authLoading, fetchAttendance]); // Depend on authLoading and the fetch function
-
-
-   const handleAttendanceChange = async (attending: boolean) => {
-       if (!user || !eventId) return;
-       setIsSaving(true);
-       setIsAttending(attending); // Optimistic UI update
-
-        // Construct the document ID
-       const attendanceDocId = `${user.uid}_${eventId}`;
-       const attendanceRef = doc(db, 'attendance', attendanceDocId);
-
-
-       try {
-         if (attending) {
-            // Mark as attending, keep existing details or set defaults
-            const currentData = attendance || {
-                userId: user.uid,
-                eventId: eventId,
-                arrivalAirport: null,
-                arrivalDateTime: null,
-                departureAirport: null,
-                departureDateTime: null,
-            };
-            await setDoc(attendanceRef, { ...currentData, attending: true }, { merge: true });
-            setAttendance(prev => ({...(prev || { userId: user.uid, eventId: eventId }), attending: true}));
-            toast({ title: "Attendance Updated", description: "You are marked as attending." });
-         } else {
-             // Mark as not attending, potentially clear details or just update flag
-             // Option 1: Just update the flag
-              // await setDoc(attendanceRef, { attending: false }, { merge: true });
-             // Option 2: Delete the record (or clear sensitive fields)
-              await deleteDoc(attendanceRef); // Let's delete the record
-              setAttendance(null);
-              // Reset form and hide matches
-              setFormState({
-                 arrivalAirport: airports[0]?.code ?? '',
-                 arrivalDate: undefined,
-                 arrivalTime: '',
-                 departureAirport: airports[0]?.code ?? '',
-                 departureDate: undefined,
-                 departureTime: '',
-               });
-               setShowMatches(false);
-              toast({ title: "Attendance Updated", description: "You are marked as not attending." });
+  // Fetch user's attendance status and details after auth is loaded and event details are potentially fetched
+  useEffect(() => {
+      if (!user || !eventId || airports.length === 0) {
+        // If user is not logged in, or eventId/airports aren't ready, set state accordingly
+        if (!authLoading && !user) {
+           setIsAttending(null); // Not logged in, status is N/A
+           setLoading(false); // Finish loading if auth is done and user is null
+        }
+         // Keep loading true if eventId or airports aren't ready, or auth is still loading
+         else if (!eventId || airports.length === 0 || authLoading) {
+            setLoading(true);
          }
-          // Re-fetch after change to be sure? Or rely on optimistic update + state management.
-         // await fetchAttendance(); // Re-fetch to confirm
-       } catch (error) {
-         console.error("Error updating attendance:", error);
-         toast({ variant: "destructive", title: "Error", description: "Failed to update attendance." });
-         setIsAttending(attendance ? false : true); // Revert optimistic update on error
-       } finally {
-         setIsSaving(false);
-       }
-     };
+        return;
+      }
 
-   const handleFormChange = (field: keyof typeof formState, value: any) => {
-    setFormState(prev => ({ ...prev, [field]: value }));
-    setShowMatches(false); // Hide matches when form changes until saved
+      setLoading(true); // Ensure loading is true while fetching attendance
+
+      const attendanceRef = doc(db, 'events', eventId, 'attendees', user.uid);
+
+      // Use onSnapshot for real-time updates
+       const unsubscribe = onSnapshot(attendanceRef, (attendanceSnap) => {
+         try {
+           if (attendanceSnap.exists()) {
+             const data = attendanceSnap.data() as Attendance;
+             setAttendance(data);
+             setIsAttending(data.attending);
+             // Populate form with existing data
+             setFormState({
+               arrivalAirport: data.arrivalAirport ?? airports[0]?.code ?? '',
+               arrivalDate: data.arrivalDateTime?.toDate(),
+               arrivalTime: data.arrivalDateTime ? format(data.arrivalDateTime.toDate(), 'HH:mm') : '',
+               departureAirport: data.departureAirport ?? airports[0]?.code ?? '',
+               departureDate: data.departureDateTime?.toDate(),
+               departureTime: data.departureDateTime ? format(data.departureDateTime.toDate(), 'HH:mm') : '',
+             });
+             setShowMatches(!!(data.arrivalDateTime || data.departureDateTime)); // Show matches if details are saved
+           } else {
+             setAttendance(null);
+             setIsAttending(null); // No record exists, status is unknown, prompt user
+             setShowMatches(false);
+             // Reset form state if no attendance record
+              setFormState({
+                arrivalAirport: airports[0]?.code ?? '',
+                arrivalDate: undefined,
+                arrivalTime: '',
+                departureAirport: airports[0]?.code ?? '',
+                departureDate: undefined,
+                departureTime: '',
+              });
+           }
+         } catch (error) {
+           console.error("Error processing attendance snapshot:", error);
+           toast({ variant: "destructive", title: "Error", description: "Failed to process attendance status." });
+           setIsAttending(null); // Error state
+           setShowMatches(false);
+         } finally {
+           setLoading(false); // Finish loading after attendance snapshot is processed
+         }
+       }, (error) => {
+         // This error callback handles errors during the listen operation itself (e.g., permissions)
+         console.error("Error fetching attendance:", error);
+         toast({ variant: "destructive", title: "Error", description: "Failed to load your attendance status. Check permissions or network." });
+         setIsAttending(null); // Error state
+         setShowMatches(false);
+         setLoading(false); // Finish loading on error
+       });
+
+
+       // Cleanup listener on component unmount or when dependencies change
+       return () => unsubscribe();
+
+     }, [user, eventId, toast, airports, authLoading]); // Add authLoading
+
+
+  const handleAttendanceChange = async (attending: boolean) => {
+    if (!user || !eventId) return;
+
+    setIsSaving(true);
+    const attendanceRef = doc(db, 'events', eventId, 'attendees', user.uid);
+
+    try {
+      // Base data to ensure user info is always included
+      const baseData = {
+        userId: user.uid,
+        userName: user.displayName || user.email,
+        userPhotoURL: user.photoURL,
+        updatedAt: Timestamp.now(),
+      };
+
+      let dataToSave: Partial<Attendance>;
+
+      if (attending) {
+        // === Clicking YES ===
+        // Only save the attending status and basic info.
+        // Flight details are saved via handleDetailsSubmit.
+        // Using merge: true ensures we don't overwrite existing flight details.
+        dataToSave = {
+          ...baseData,
+          attending: true,
+        };
+      } else {
+        // === Clicking NO ===
+        // Save attending false and explicitly clear flight details.
+        dataToSave = {
+          ...baseData,
+          attending: false,
+          arrivalAirport: deleteField(), // Use deleteField() or null
+          arrivalDateTime: deleteField(),
+          departureAirport: deleteField(),
+          departureDateTime: deleteField(),
+        };
+      }
+
+      await setDoc(attendanceRef, dataToSave, { merge: true });
+
+      // Local state updates after successful save
+      setIsAttending(attending);
+      setAttendance(prev => ({ ...(prev ?? baseData), ...dataToSave })); // Update local attendance state
+
+      // Reset form and hide matches if marking as not attending
+      if (!attending) {
+        setFormState({
+          arrivalAirport: airports[0]?.code ?? '',
+          arrivalDate: undefined,
+          arrivalTime: '',
+          departureAirport: airports[0]?.code ?? '',
+          departureDate: undefined,
+          departureTime: '',
+        });
+        setShowMatches(false);
+      }
+
+      toast({ title: "Success", description: `You are now marked as ${attending ? 'attending' : 'not attending'}.` });
+    } catch (error) {
+      console.error("Error updating attendance:", error);
+      toast({ variant: "destructive", title: "Error", description: "Failed to update your attendance." });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-   const handleSaveDetails = async (event: React.FormEvent) => {
-       event.preventDefault();
-       if (!user || !eventId || !isAttending) return;
-       setIsSaving(true);
 
-       const { arrivalAirport, arrivalDate, arrivalTime, departureAirport, departureDate, departureTime } = formState;
+ const handleDetailsSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+     e.preventDefault();
+     if (!user || !eventId) return; // Removed isAttending check here
 
-       // Combine Date and Time into Timestamps
-       const combineDateTime = (date: Date | undefined, time: string): Timestamp | null => {
-         if (!date || !time) return null;
-         const [hours, minutes] = time.split(':').map(Number);
-         if (isNaN(hours) || isNaN(minutes)) return null; // Basic validation
-         const combinedDate = new Date(date);
-         combinedDate.setHours(hours, minutes, 0, 0); // Set hours and minutes
-         return Timestamp.fromDate(combinedDate);
-       };
+     setIsSaving(true);
+     const attendanceRef = doc(db, 'events', eventId, 'attendees', user.uid);
 
-       const arrivalDateTime = combineDateTime(arrivalDate, arrivalTime);
-       const departureDateTime = combineDateTime(departureDate, departureTime);
-
-
-        // Basic validation
-       if ((arrivalDate && !arrivalTime) || (!arrivalDate && arrivalTime)) {
-            toast({ variant: "destructive", title: "Validation Error", description: "Please provide both arrival date and time, or neither." });
-            setIsSaving(false);
-            return;
-        }
-       if ((departureDate && !departureTime) || (!departureDate && departureTime)) {
-            toast({ variant: "destructive", title: "Validation Error", description: "Please provide both departure date and time, or neither." });
-            setIsSaving(false);
-            return;
-        }
-
-
-       const attendanceDocId = `${user.uid}_${eventId}`;
-       const attendanceRef = doc(db, 'attendance', attendanceDocId);
-
-       const dataToSave: Partial<Attendance> = {
-         attending: true, // Ensure attending is true
-         arrivalAirport: arrivalAirport || null,
-         arrivalDateTime: arrivalDateTime,
-         departureAirport: departureAirport || null,
-         departureDateTime: departureDateTime,
-       };
-
+     // Combine Date and Time into Timestamp objects
+     let arrivalTimestamp: Timestamp | undefined | null = undefined;
+     if (formState.arrivalDate && formState.arrivalTime) {
        try {
-         await setDoc(attendanceRef, dataToSave, { merge: true });
-         setAttendance(prev => ({ ...(prev || { userId: user.uid, eventId: eventId }), ...dataToSave } as Attendance));
-         toast({ title: "Success", description: "Your flight details have been saved." });
-          setShowMatches(true); // Show matches after saving
-       } catch (error) {
-         console.error("Error saving details:", error);
-         toast({ variant: "destructive", title: "Error", description: "Failed to save flight details." });
-          setShowMatches(false);
-       } finally {
-         setIsSaving(false);
+         const [hours, minutes] = formState.arrivalTime.split(':').map(Number);
+         const arrivalDateTime = new Date(formState.arrivalDate);
+         arrivalDateTime.setHours(hours, minutes, 0, 0); // Set hours and minutes
+         arrivalTimestamp = Timestamp.fromDate(arrivalDateTime);
+       } catch (err) {
+           console.error("Invalid arrival date/time format");
+           toast({ variant: "destructive", title: "Error", description: "Invalid arrival time format. Please use HH:mm." });
+           setIsSaving(false);
+           return;
        }
-     };
+     } else if (formState.arrivalDate === undefined && formState.arrivalTime === '') {
+         arrivalTimestamp = null; // Explicitly clearing
+     }
 
+     let departureTimestamp: Timestamp | undefined | null = undefined;
+     if (formState.departureDate && formState.departureTime) {
+        try {
+            const [hours, minutes] = formState.departureTime.split(':').map(Number);
+            const departureDateTime = new Date(formState.departureDate);
+            departureDateTime.setHours(hours, minutes, 0, 0); // Set hours and minutes
+            departureTimestamp = Timestamp.fromDate(departureDateTime);
+        } catch (err) {
+            console.error("Invalid departure date/time format");
+            toast({ variant: "destructive", title: "Error", description: "Invalid departure time format. Please use HH:mm." });
+            setIsSaving(false);
+            return;
+        }
+     } else if (formState.departureDate === undefined && formState.departureTime === '') {
+         departureTimestamp = null; // Explicitly clearing
+     }
 
-     const handleFindRideClick = () => {
-         if (attendance && (attendance.arrivalDateTime || attendance.departureDateTime)) {
-             setShowMatches(true);
-         } else {
-             toast({ title: "Enter Details", description: "Please save your arrival or departure details first to find matches."});
+      // Check if at least one detail is provided or if both are being cleared
+     if (!arrivalTimestamp && !departureTimestamp) {
+         // Only show error if the user *intended* to submit details but didn't provide any
+         // If both were null from the start, allow saving (marks as attending)
+         const hasExistingDetails = attendance?.arrivalDateTime || attendance?.departureDateTime;
+         if (hasExistingDetails || formState.arrivalAirport || formState.departureAirport) {
+            toast({ variant: "destructive", title: "Error", description: "Please provide either arrival or departure details (or both)." });
+            setIsSaving(false);
+            return;
          }
-     };
+         // If no existing details and no input, proceed to mark as attending
+     }
 
+
+     try {
+        // Base data structure including setting attending to true
+        const dataToSave: Partial<Attendance> = {
+            userId: user.uid,
+            userName: user.displayName || user.email,
+            userPhotoURL: user.photoURL,
+            attending: true, // Saving details implies attending
+            arrivalAirport: arrivalTimestamp ? formState.arrivalAirport : deleteField(), // Use deleteField() if clearing
+            arrivalDateTime: arrivalTimestamp === null ? deleteField() : arrivalTimestamp, // Use deleteField() if clearing
+            departureAirport: departureTimestamp ? formState.departureAirport : deleteField(), // Use deleteField() if clearing
+            departureDateTime: departureTimestamp === null ? deleteField() : departureTimestamp, // Use deleteField() if clearing
+            updatedAt: Timestamp.now(),
+        };
+
+       // Remove undefined fields that should be deleted
+       Object.keys(dataToSave).forEach(key => {
+           if (dataToSave[key as keyof typeof dataToSave] === undefined) {
+                dataToSave[key as keyof typeof dataToSave] = deleteField();
+           }
+       });
+
+       await setDoc(attendanceRef, dataToSave, { merge: true }); // Use merge to ensure we don't overwrite other fields unnecessarily
+
+       // Update local state based on saved data
+       // Re-fetch or update state carefully based on `dataToSave`
+       // Note: Setting state directly might be slightly out of sync if `deleteField` was used extensively
+       // The onSnapshot listener should ideally handle the update visually.
+        setIsAttending(true); // Ensure isAttending is true
+        // Let the snapshot listener update the form and showMatches state for consistency
+        // setShowMatches(!!(arrivalTimestamp || departureTimestamp)); // Show matches after saving
+
+       toast({ title: "Success", description: "Your travel details have been saved." });
+     } catch (error) {
+       console.error("Error saving travel details:", error);
+       toast({ variant: "destructive", title: "Error", description: "Failed to save your travel details." });
+     } finally {
+       setIsSaving(false);
+     }
+   };
+
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+     // Special handling potentially needed for select if using its 'name' attribute directly
+    setFormState(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormState(prev => ({ ...prev, [name]: value }));
+  };
+
+
+  const handleDateChange = (name: string, date: Date | undefined) => {
+      setFormState(prev => ({
+        ...prev,
+        [name]: date,
+        // Reset time if date is cleared
+        [`${name.replace('Date', 'Time')}`]: date ? prev[`${name.replace('Date', 'Time')}` as keyof typeof formState] : '',
+      }));
+  };
+
+
+  // Render loading state
   if (loading || authLoading) {
-    return (
-      <div className="container mx-auto py-12 px-4 md:px-6 flex justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      </div>
-    );
+    return <div className="flex justify-center items-center h-screen"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
+  // Render message if event not found or user not logged in for specific actions
   if (!event) {
-    return ( // Handles case where event fetch finished but found nothing (already handled by redirect, but good safety check)
-        <div className="container mx-auto py-12 px-4 md:px-6">
-             <p className="text-center text-muted-foreground">Event not found.</p>
-         </div>
-    );
+    return <div className="text-center py-10">Event not found.</div>;
   }
 
-  const canSave = formState.arrivalAirport && formState.arrivalDate && formState.arrivalTime ||
-                   formState.departureAirport && formState.departureDate && formState.departureTime;
+  if (!user) {
+      return (
+          <div className="container mx-auto p-4">
+              <Card>
+                  <CardHeader>
+                      <CardTitle>{event.name}</CardTitle>
+                      <CardDescription>
+                          {format(event.startDate.toDate(), 'PPP')} - {format(event.endDate.toDate(), 'PPP')} <br />
+                          {event.location}
+                      </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                      <p>Please log in to view attendance details and find ride matches.</p>
+                      {/* Optionally add a login button here */}
+                  </CardContent>
+              </Card>
+          </div>
+      );
+  }
 
 
+  // Main component render
   return (
-    <div className="container mx-auto py-12 px-4 md:px-6 space-y-8">
-      <Card className="shadow-lg">
+    <div className="container mx-auto p-4 space-y-6">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-3xl text-primary">{event.name}</CardTitle>
-          <CardDescription className="flex items-center space-x-4 text-md">
-            <span><MapPin className="inline-block h-4 w-4 mr-1" />{event.city}, {event.state}</span>
-            <span><CalendarIcon className="inline-block h-4 w-4 mr-1" />{formatEventDate(event.startDate)} - {formatEventDate(event.endDate)}</span>
+          <CardTitle>{event.name}</CardTitle>
+          <CardDescription>
+            {format(event.startDate.toDate(), 'PPP')} - {format(event.endDate.toDate(), 'PPP')} <br />
+            {event.location}
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          <p className="mb-6">Coordinate your airport transportation with other attendees for {event.name}.</p>
 
-          {!user && (
-            <Card className="border-dashed border-primary bg-primary/5 p-4 text-center">
-              <p className="text-primary mb-2 font-medium">Please sign in to manage your attendance and find rides.</p>
-              {/* Maybe add a sign-in button here? The header one works too. */}
-            </Card>
+        <CardContent className="space-y-4">
+          {/* Attendance Buttons */}
+          <div className="flex gap-4 items-center">
+              <span>Are you attending?</span>
+              <Button
+                onClick={() => handleAttendanceChange(true)}
+                variant={isAttending === true ? "default" : "outline"}
+                disabled={isSaving || isAttending === true}
+              >
+                Yes
+              </Button>
+              <Button
+                onClick={() => handleAttendanceChange(false)}
+                variant={isAttending === false ? "default" : "outline"}
+                disabled={isSaving || isAttending === false}
+              >
+                No
+              </Button>
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
+          </div>
+
+          {/* Ride Details Form - Show if isAttending is true OR if it's null (meaning unknown/prompt) */}
+          {(isAttending === true || isAttending === null) && (
+              <form onSubmit={handleDetailsSubmit} className="space-y-4 pt-4 border-t">
+                 <h3 className="text-lg font-semibold">Share Your Travel Details (Optional)</h3>
+                 <p className="text-sm text-muted-foreground">
+                    {isAttending === null ? "Indicate if you are attending first, or fill this in to automatically mark yourself as attending." : "Provide your flight details to find potential ride matches."}
+                 </p>
+
+                 {/* Arrival Details */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                     <Label htmlFor="arrivalAirport">Arrival Airport</Label>
+                     <Select name="arrivalAirport" value={formState.arrivalAirport} onValueChange={(value) => handleSelectChange('arrivalAirport', value)}>
+                         <SelectTrigger>
+                             <SelectValue placeholder="Select arrival airport" />
+                         </SelectTrigger>
+                         <SelectContent>
+                             {airports.map(airport => (
+                                 <SelectItem key={airport.code} value={airport.code}>
+                                     {airport.code} - {airport.name}
+                                 </SelectItem>
+                             ))}
+                         </SelectContent>
+                     </Select>
+                  </div>
+                   <div className="space-y-2">
+                     <Label htmlFor="arrivalDate">Arrival Date</Label>
+                     <Popover>
+                       <PopoverTrigger asChild>
+                         <Button
+                           variant={"outline"}
+                           className={cn(
+                             "w-full justify-start text-left font-normal",
+                             !formState.arrivalDate && "text-muted-foreground"
+                           )}
+                         >
+                           <CalendarIcon className="mr-2 h-4 w-4" />
+                           {formState.arrivalDate ? format(formState.arrivalDate, "PPP") : <span>Pick a date</span>}
+                         </Button>
+                       </PopoverTrigger>
+                       <PopoverContent className="w-auto p-0">
+                         <Calendar
+                           mode="single"
+                           selected={formState.arrivalDate}
+                           onSelect={(date) => handleDateChange('arrivalDate', date)}
+                           initialFocus
+                         />
+                       </PopoverContent>
+                     </Popover>
+                   </div>
+                   <div className="space-y-2">
+                     <Label htmlFor="arrivalTime">Arrival Time (HH:mm)</Label>
+                     <Input
+                         id="arrivalTime"
+                         name="arrivalTime"
+                         type="time"
+                         value={formState.arrivalTime}
+                         onChange={handleInputChange}
+                         disabled={!formState.arrivalDate} // Disable if date is not set
+                     />
+                   </div>
+                </div>
+
+                 {/* Departure Details */}
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                     <Label htmlFor="departureAirport">Departure Airport</Label>
+                     <Select name="departureAirport" value={formState.departureAirport} onValueChange={(value) => handleSelectChange('departureAirport', value)}>
+                         <SelectTrigger>
+                             <SelectValue placeholder="Select departure airport" />
+                         </SelectTrigger>
+                         <SelectContent>
+                             {airports.map(airport => (
+                                 <SelectItem key={airport.code} value={airport.code}>
+                                     {airport.code} - {airport.name}
+                                 </SelectItem>
+                             ))}
+                         </SelectContent>
+                     </Select>
+                  </div>
+                   <div className="space-y-2">
+                     <Label htmlFor="departureDate">Departure Date</Label>
+                     <Popover>
+                       <PopoverTrigger asChild>
+                         <Button
+                           variant={"outline"}
+                           className={cn(
+                             "w-full justify-start text-left font-normal",
+                             !formState.departureDate && "text-muted-foreground"
+                           )}
+                         >
+                           <CalendarIcon className="mr-2 h-4 w-4" />
+                           {formState.departureDate ? format(formState.departureDate, "PPP") : <span>Pick a date</span>}
+                         </Button>
+                       </PopoverTrigger>
+                       <PopoverContent className="w-auto p-0">
+                         <Calendar
+                           mode="single"
+                           selected={formState.departureDate}
+                           onSelect={(date) => handleDateChange('departureDate', date)}
+                           initialFocus
+                         />
+                       </PopoverContent>
+                     </Popover>
+                   </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="departureTime">Departure Time (HH:mm)</Label>
+                        <Input
+                            id="departureTime"
+                            name="departureTime"
+                            type="time"
+                            value={formState.departureTime}
+                            onChange={handleInputChange}
+                            disabled={!formState.departureDate} // Disable if date is not set
+                        />
+                   </div>
+                </div>
+
+                 <Button type="submit" disabled={isSaving}>
+                   {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                   Save Travel Details
+                 </Button>
+              </form>
           )}
 
-          {user && isAttending === null && ( // Show loading indicator only when logged in and attendance is loading
-              <div className="flex items-center justify-center p-4">
-                 <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" /> Loading attendance status...
-              </div>
-            )}
-
-           {user && isAttending !== null && (
-                <div className="space-y-4">
-                     <div className="flex items-center space-x-4">
-                        <Label className="text-lg">Are you attending?</Label>
-                        <div className="flex items-center space-x-2">
-                            <Button
-                                variant={isAttending ? "default" : "outline"}
-                                onClick={() => !isAttending && handleAttendanceChange(true)}
-                                disabled={isSaving || isAttending}
-                                size="sm"
-                            >
-                                <CheckCircle className={`mr-2 h-4 w-4 ${isAttending ? '' : 'text-muted-foreground'}`} /> Yes
-                            </Button>
-
-                             <AlertDialog>
-                                 <AlertDialogTrigger asChild>
-                                    <Button
-                                        variant={!isAttending ? "destructive" : "outline"}
-                                        disabled={isSaving || !isAttending}
-                                        size="sm"
-                                    >
-                                        <XCircle className={`mr-2 h-4 w-4 ${!isAttending ? '' : 'text-muted-foreground'}`} /> No
-                                    </Button>
-                                 </AlertDialogTrigger>
-                                 <AlertDialogContent>
-                                    <AlertDialogHeader>
-                                    <AlertDialogTitle>Confirm Attendance Change</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                        Marking yourself as not attending will remove your saved flight details and ride matches for this event. Are you sure?
-                                    </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleAttendanceChange(false)} className={Button({ variant: "destructive" })}>
-                                        Yes, Not Attending
-                                    </AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-
-
-                            {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
-                        </div>
-                     </div>
-
-                    {isAttending && (
-                        <Card className="bg-secondary/50 p-6">
-                             <form onSubmit={handleSaveDetails} className="space-y-6">
-                                <h3 className="text-xl font-semibold mb-4 text-primary">Your Flight Details</h3>
-                                {/* Arrival Details */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                                    <div>
-                                        <Label htmlFor="arrival-airport">Arrival Airport</Label>
-                                         <Select
-                                             value={formState.arrivalAirport}
-                                             onValueChange={(value) => handleFormChange('arrivalAirport', value)}
-                                         >
-                                             <SelectTrigger id="arrival-airport">
-                                                 <SelectValue placeholder="Select airport" />
-                                             </SelectTrigger>
-                                             <SelectContent>
-                                                 {airports.map(ap => (
-                                                    <SelectItem key={ap.code} value={ap.code}>{ap.code} - {ap.name}</SelectItem>
-                                                 ))}
-                                            </SelectContent>
-                                         </Select>
-                                     </div>
-                                     <div>
-                                         <Label htmlFor="arrival-date">Arrival Date</Label>
-                                         <Popover>
-                                             <PopoverTrigger asChild>
-                                                 <Button
-                                                    id="arrival-date"
-                                                    variant={"outline"}
-                                                    className="w-full justify-start text-left font-normal"
-                                                >
-                                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                                    {formState.arrivalDate ? format(formState.arrivalDate, "PPP") : <span>Pick a date</span>}
-                                                </Button>
-                                             </PopoverTrigger>
-                                             <PopoverContent className="w-auto p-0">
-                                                 <Calendar
-                                                     mode="single"
-                                                     selected={formState.arrivalDate}
-                                                     onSelect={(date) => handleFormChange('arrivalDate', date)}
-                                                     initialFocus
-                                                     // Disable dates outside event range? (Optional)
-                                                     // fromDate={event.startDate.toDate()}
-                                                     // toDate={event.endDate.toDate()}
-                                                 />
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                     <div>
-                                         <Label htmlFor="arrival-time">Arrival Time</Label>
-                                         <Input
-                                             id="arrival-time"
-                                             type="time"
-                                             value={formState.arrivalTime}
-                                             onChange={(e) => handleFormChange('arrivalTime', e.target.value)}
-                                         />
-                                     </div>
-                                </div>
-
-                                {/* Departure Details */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                                     <div>
-                                         <Label htmlFor="departure-airport">Departure Airport</Label>
-                                          <Select
-                                             value={formState.departureAirport}
-                                             onValueChange={(value) => handleFormChange('departureAirport', value)}
-                                         >
-                                             <SelectTrigger id="departure-airport">
-                                                 <SelectValue placeholder="Select airport" />
-                                             </SelectTrigger>
-                                             <SelectContent>
-                                                  {airports.map(ap => (
-                                                    <SelectItem key={ap.code} value={ap.code}>{ap.code} - {ap.name}</SelectItem>
-                                                 ))}
-                                            </SelectContent>
-                                         </Select>
-                                     </div>
-                                     <div>
-                                         <Label htmlFor="departure-date">Departure Date</Label>
-                                          <Popover>
-                                             <PopoverTrigger asChild>
-                                                 <Button
-                                                    id="departure-date"
-                                                    variant={"outline"}
-                                                    className="w-full justify-start text-left font-normal"
-                                                 >
-                                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                                     {formState.departureDate ? format(formState.departureDate, "PPP") : <span>Pick a date</span>}
-                                                 </Button>
-                                             </PopoverTrigger>
-                                             <PopoverContent className="w-auto p-0">
-                                                 <Calendar
-                                                     mode="single"
-                                                     selected={formState.departureDate}
-                                                     onSelect={(date) => handleFormChange('departureDate', date)}
-                                                     initialFocus
-                                                      // fromDate={event.startDate.toDate()}
-                                                      // toDate={event.endDate.toDate()} // Allow departure after end date?
-                                                 />
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                    <div>
-                                        <Label htmlFor="departure-time">Departure Time</Label>
-                                         <Input
-                                             id="departure-time"
-                                             type="time"
-                                             value={formState.departureTime}
-                                             onChange={(e) => handleFormChange('departureTime', e.target.value)}
-                                         />
-                                    </div>
-                                </div>
-
-                                <Button type="submit" disabled={isSaving || !canSave} className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                    Save Details
-                                 </Button>
-                             </form>
-                         </Card>
-                    )}
-                </div>
+            {/* Show Ride Matches Component - Only if attending and details have been potentially saved (showMatches is true) */}
+            {isAttending === true && showMatches && eventId && user && (
+                 <div className="pt-4 border-t">
+                      <RideMatches eventId={eventId} currentUserId={user.uid} />
+                 </div>
             )}
         </CardContent>
-        {/* Add a footer for consistency or actions if needed */}
-         {/* <CardFooter>
-           <p>Footer content if needed</p>
-         </CardFooter> */}
       </Card>
-
-       {/* Ride Matching Section - Conditionally rendered */}
-       {user && isAttending && (
-            <Card className="shadow-lg">
-                <CardHeader>
-                    <CardTitle className="text-2xl text-primary">Find a Ride</CardTitle>
-                    <CardDescription>
-                         {showMatches
-                             ? "See who's travelling around the same time as you."
-                             : "Save your flight details to view potential ride matches."}
-                     </CardDescription>
-                </CardHeader>
-                 <CardContent>
-                    {!showMatches && (
-                        <div className="text-center">
-                            <Button onClick={handleFindRideClick} disabled={!canSave}>
-                                <Car className="mr-2 h-4 w-4"/> View Potential Matches
-                            </Button>
-                            {!canSave && <p className="text-sm text-muted-foreground mt-2">Enter and save at least one flight detail first.</p>}
-                        </div>
-                    )}
-                     {showMatches && attendance && eventId && user && (
-                         <RideMatches
-                             eventId={eventId}
-                             currentUserAttendance={attendance}
-                             currentUserId={user.uid}
-                          />
-                    )}
-                 </CardContent>
-            </Card>
-        )}
-
     </div>
   );
 }
