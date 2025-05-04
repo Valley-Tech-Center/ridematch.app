@@ -70,113 +70,127 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
 
     const { arrivalAirport, arrivalDateTime, departureAirport, departureDateTime } = currentUserAttendance;
 
+    // If user has no arrival/departure details, no need to query
     if (!arrivalDateTime && !departureDateTime) {
-        setLoading(false);
-        return; // No details to match against
+      setLoading(false);
+      return;
     }
-
 
     try {
       const attendanceRef = collection(db, 'attendance');
+      // --- Base Query: Removed the userId != currentUserId filter --- 
       const baseQuery = query(
         attendanceRef,
         where('eventId', '==', eventId),
-        where('attending', '==', true),
-        where('userId', '!=', currentUserId) // Exclude self
+        where('attending', '==', true)
+        // where('userId', '!=', currentUserId) // REMOVED: Firestore limitation
       );
 
       let arrivalQuery = null;
       let departureQuery = null;
 
-      // --- Arrival Matching ---
+      // --- Arrival Matching Query ---
       if (arrivalAirport && arrivalDateTime) {
-         const arrivalTime = arrivalDateTime.toDate();
-         const minArrivalTime = new Date(arrivalTime.getTime() - MAX_TIME_DIFF_MINUTES * 60000);
-         const maxArrivalTime = new Date(arrivalTime.getTime() + MAX_TIME_DIFF_MINUTES * 60000);
+        const arrivalTime = arrivalDateTime.toDate();
+        const minArrivalTime = new Date(arrivalTime.getTime() - MAX_TIME_DIFF_MINUTES * 60000);
+        const maxArrivalTime = new Date(arrivalTime.getTime() + MAX_TIME_DIFF_MINUTES * 60000);
 
-         arrivalQuery = query(
-           baseQuery,
-           where('arrivalAirport', '==', arrivalAirport),
-           where('arrivalDateTime', '>=', Timestamp.fromDate(minArrivalTime)),
-           where('arrivalDateTime', '<=', Timestamp.fromDate(maxArrivalTime))
-         );
+        arrivalQuery = query(
+          baseQuery, // Uses the modified baseQuery
+          where('arrivalAirport', '==', arrivalAirport),
+          where('arrivalDateTime', '>=', Timestamp.fromDate(minArrivalTime)),
+          where('arrivalDateTime', '<=', Timestamp.fromDate(maxArrivalTime))
+        );
       }
 
-      // --- Departure Matching ---
+      // --- Departure Matching Query ---
       if (departureAirport && departureDateTime) {
-          const departureTime = departureDateTime.toDate();
-          const minDepartureTime = new Date(departureTime.getTime() - MAX_TIME_DIFF_MINUTES * 60000);
-          const maxDepartureTime = new Date(departureTime.getTime() + MAX_TIME_DIFF_MINUTES * 60000);
+        const departureTime = departureDateTime.toDate();
+        const minDepartureTime = new Date(departureTime.getTime() - MAX_TIME_DIFF_MINUTES * 60000);
+        const maxDepartureTime = new Date(departureTime.getTime() + MAX_TIME_DIFF_MINUTES * 60000);
 
-          departureQuery = query(
-            baseQuery,
-            where('departureAirport', '==', departureAirport),
-            where('departureDateTime', '>=', Timestamp.fromDate(minDepartureTime)),
-            where('departureDateTime', '<=', Timestamp.fromDate(maxDepartureTime))
-          );
+        departureQuery = query(
+          baseQuery, // Uses the modified baseQuery
+          where('departureAirport', '==', departureAirport),
+          where('departureDateTime', '>=', Timestamp.fromDate(minDepartureTime)),
+          where('departureDateTime', '<=', Timestamp.fromDate(maxDepartureTime))
+        );
       }
 
-       // --- Fetch User Profiles ---
-       const fetchUserProfiles = async (userIds: string[]): Promise<Map<string, UserProfile>> => {
-         const profiles = new Map<string, UserProfile>();
-         if (userIds.length === 0) return profiles;
+      // --- Fetch User Profiles --- 
+      const fetchUserProfiles = async (userIds: string[]): Promise<Map<string, UserProfile>> => {
+        const profiles = new Map<string, UserProfile>();
+        if (userIds.length === 0) return profiles;
 
-         // Firestore 'in' query limit is 30 - chunk if necessary
-         const MAX_IDS_PER_QUERY = 30;
-         for (let i = 0; i < userIds.length; i += MAX_IDS_PER_QUERY) {
-             const chunkUserIds = userIds.slice(i, i + MAX_IDS_PER_QUERY);
-             if (chunkUserIds.length > 0) {
-                  const usersRef = collection(db, 'users');
-                  const q = query(usersRef, where('uid', 'in', chunkUserIds));
-                  const querySnapshot = await getDocs(q);
-                  querySnapshot.forEach((doc) => {
-                      profiles.set(doc.id, doc.data() as UserProfile);
-                  });
-             }
-         }
-         return profiles;
-       };
+        const MAX_IDS_PER_QUERY = 30; // Firestore 'in' query limit
+        for (let i = 0; i < userIds.length; i += MAX_IDS_PER_QUERY) {
+          const chunkUserIds = userIds.slice(i, i + MAX_IDS_PER_QUERY);
+          if (chunkUserIds.length > 0) {
+            const usersRef = collection(db, 'users');
+            // Ensure the query uses the field name 'uid' as stored in the 'users' collection
+            const q = query(usersRef, where('uid', 'in', chunkUserIds)); 
+            const querySnapshot = await getDocs(q);
+            querySnapshot.forEach((doc) => {
+              // Use doc.id (which should be the uid) as the key
+              profiles.set(doc.id, { uid: doc.id, ...doc.data() } as UserProfile);
+            });
+          }
+        }
+        return profiles;
+      };
 
+      // --- Execute Queries and Process Results ---
+      const processResults = async (
+        querySnapshot: Awaited<ReturnType<typeof getDocs>> | null,
+        setMatches: React.Dispatch<React.SetStateAction<RideMatch[]>>
+      ) => {
+        if (!querySnapshot || querySnapshot.empty) {
+          setMatches([]); // Ensure matches are cleared if no results
+          return;
+        }
 
-       // --- Execute Queries and Process Results ---
-        const processResults = async (querySnapshot: Awaited<ReturnType<typeof getDocs>> | null, setMatches: React.Dispatch<React.SetStateAction<RideMatch[]>>) => {
-            if (!querySnapshot) return;
+        // --- Filter out current user client-side ---
+        const filteredDocs = querySnapshot.docs.filter(doc => doc.data().userId !== currentUserId);
+        
+        if (filteredDocs.length === 0) {
+            setMatches([]); // Set empty if only the current user matched
+            return;
+        }
 
-            const matchesData = querySnapshot.docs.map(doc => doc.data() as Attendance);
-            const userIds = matchesData.map(match => match.userId);
-            const userProfilesMap = await fetchUserProfiles(userIds);
+        const matchesData = filteredDocs.map(doc => doc.data() as Attendance);
+        const userIds = matchesData.map(match => match.userId);
+        const userProfilesMap = await fetchUserProfiles(userIds);
 
-             const combinedMatches: RideMatch[] = matchesData.map(match => ({
-               ...match,
-               userProfile: userProfilesMap.get(match.userId) || null,
-            }));
+        const combinedMatches: RideMatch[] = matchesData.map(match => ({
+          ...match,
+          userProfile: userProfilesMap.get(match.userId) || null,
+        }));
 
-            setMatches(combinedMatches);
-        };
+        setMatches(combinedMatches);
+      };
 
-
-      // Run queries in parallel if both exist
+      // Run queries in parallel
       const [arrivalResults, departureResults] = await Promise.all([
-         arrivalQuery ? getDocs(arrivalQuery) : null,
-         departureQuery ? getDocs(departureQuery) : null,
+        arrivalQuery ? getDocs(arrivalQuery) : Promise.resolve(null),
+        departureQuery ? getDocs(departureQuery) : Promise.resolve(null),
       ]);
-
 
       await processResults(arrivalResults, setArrivalMatches);
       await processResults(departureResults, setDepartureMatches);
 
-
     } catch (err) {
       console.error("Error fetching matches:", err);
       setError("Failed to load ride matches. Please try again.");
+      setArrivalMatches([]); // Clear matches on error
+      setDepartureMatches([]);
     } finally {
       setLoading(false);
     }
-  }, [eventId, currentUserId, currentUserAttendance]); // Include currentUserAttendance
+  }, [eventId, currentUserId, currentUserAttendance]); // Dependencies
 
   useEffect(() => {
     fetchMatches();
-  }, [fetchMatches]); // Depend on the memoized fetchMatches function
+  }, [fetchMatches]);
 
 
   const sendRideRequest = async (recipientId: string, type: 'arrival' | 'departure') => {
@@ -188,21 +202,16 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
       senderId: currentUserId,
       recipientId: recipientId,
       eventId: eventId,
-      type: type, // 'arrival' or 'departure'
+      type: type, 
       senderArrivalDateTime: currentUserAttendance.arrivalDateTime || null,
       senderDepartureDateTime: currentUserAttendance.departureDateTime || null,
-      status: 'pending', // 'pending', 'accepted', 'declined'
+      status: 'pending', 
       createdAt: serverTimestamp(),
       read: false,
     };
 
     try {
-       // TODO: Implement actual notification sending logic.
-       // This could involve:
-       // 1. Writing to a 'notifications' collection in Firestore.
-       // 2. Setting up Cloud Functions to listen to this collection and send push notifications (FCM), emails, etc.
-       // 3. For now, we'll just simulate by writing to Firestore and showing a toast.
-
+      // Add notification document to Firestore
       await addDoc(collection(db, 'notifications'), notificationData);
 
       toast({
@@ -217,7 +226,7 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
         description: "Failed to send ride request.",
       });
     } finally {
-       setSendingNotification(prev => ({ ...prev, [recipientId + type]: false }));
+      setSendingNotification(prev => ({ ...prev, [recipientId + type]: false }));
     }
   };
 
@@ -226,6 +235,8 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
     return <div className="flex justify-center items-center p-6"><Loader2 className="h-8 w-8 animate-spin text-primary" /> <span className="ml-2">Finding matches...</span></div>;
   }
 
+  // Don't show error if there are simply no matches (and loading is done)
+  // Error state is now only for actual fetch errors
   if (error) {
     return <Alert variant="destructive">
               <AlertTitle>Error</AlertTitle>
@@ -233,17 +244,21 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
            </Alert>;
   }
 
-   const noArrivalMatches = currentUserAttendance.arrivalDateTime && arrivalMatches.length === 0;
-   const noDepartureMatches = currentUserAttendance.departureDateTime && departureMatches.length === 0;
+  // Check if user has details to match against
+  const hasArrivalDetails = !!currentUserAttendance.arrivalDateTime;
+  const hasDepartureDetails = !!currentUserAttendance.departureDateTime;
 
+  // Determine if we should show the "no matches found" messages
+  const showNoArrivalMatches = hasArrivalDetails && arrivalMatches.length === 0 && !loading && !error;
+  const showNoDepartureMatches = hasDepartureDetails && departureMatches.length === 0 && !loading && !error;
 
   return (
     <div className="space-y-6">
       {/* Arrival Matches */}
-      {currentUserAttendance.arrivalDateTime && (
+      {hasArrivalDetails && (
         <div>
           <h3 className="text-lg font-semibold mb-3 flex items-center"><Plane className="mr-2 h-5 w-5 text-primary" /> Arrival Matches ({arrivalMatches.length})</h3>
-          {noArrivalMatches && !loading && <p className="text-muted-foreground text-sm">No attendees found arriving around your time ({formatTime(currentUserAttendance.arrivalDateTime)} at {currentUserAttendance.arrivalAirport}).</p>}
+          {showNoArrivalMatches && <p className="text-muted-foreground text-sm">No attendees found arriving near your time ({formatTime(currentUserAttendance.arrivalDateTime)} at {currentUserAttendance.arrivalAirport}).</p>}
           {arrivalMatches.length > 0 && (
             <Table>
               <TableHeader>
@@ -285,10 +300,10 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
       )}
 
       {/* Departure Matches */}
-      {currentUserAttendance.departureDateTime && (
+      {hasDepartureDetails && (
         <div>
           <h3 className="text-lg font-semibold mb-3 flex items-center"><PlaneTakeoff className="mr-2 h-5 w-5 text-primary" /> Departure Matches ({departureMatches.length})</h3>
-          {noDepartureMatches && !loading && <p className="text-muted-foreground text-sm">No attendees found departing around your time ({formatTime(currentUserAttendance.departureDateTime)} from {currentUserAttendance.departureAirport}).</p>}
+          {showNoDepartureMatches && <p className="text-muted-foreground text-sm">No attendees found departing near your time ({formatTime(currentUserAttendance.departureDateTime)} from {currentUserAttendance.departureAirport}).</p>}
           {departureMatches.length > 0 && (
             <Table>
               <TableHeader>
@@ -327,6 +342,11 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
             </Table>
           )}
         </div>
+      )}
+
+      {/* Message if user has no details entered */}
+      {!hasArrivalDetails && !hasDepartureDetails && !loading && !error && (
+           <p className="text-muted-foreground text-sm p-4 text-center">Enter your arrival or departure details above to find ride matches.</p>
       )}
     </div>
   );

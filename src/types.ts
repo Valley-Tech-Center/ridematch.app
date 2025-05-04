@@ -1,6 +1,16 @@
 import type { Timestamp } from 'firebase/firestore';
 
 /**
+ * Represents an airport, potentially embedded within an Event or fetched separately.
+ */
+export interface Airport {
+  code: string; // e.g., "SFO"
+  name: string; // e.g., "San Francisco International Airport"
+  city: string; // e.g., "San Francisco"
+  // Potentially add country, coordinates, etc.
+}
+
+/**
  * Represents an event document in Firestore.
  */
 export interface Event {
@@ -12,6 +22,7 @@ export interface Event {
   startDate: Timestamp;
   endDate: Timestamp;
   description?: string; // Optional description
+  airports: Airport[]; // Array of relevant airports for the event's city
   // Potentially add aggregated counts later if needed for performance
   // attendeeCount?: number;
   // rideMatchCount?: number;
@@ -46,17 +57,6 @@ export interface UserProfile {
   // Add any other profile information you want to store
   createdAt?: Timestamp;
   lastLogin?: Timestamp;
-}
-
-
-/**
- * Represents an airport, potentially fetched from an external API or a static list.
- */
-export interface Airport {
-  code: string; // e.g., "SFO"
-  name: string; // e.g., "San Francisco International Airport"
-  city: string; // e.g., "San Francisco"
-  // Potentially add country, coordinates, etc.
 }
 
 /**

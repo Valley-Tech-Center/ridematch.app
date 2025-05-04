@@ -25,12 +25,12 @@ export default function Home() {
           Coordinate airport rides with fellow event attendees. Save money, reduce emissions, and connect!
         </p>
          <Image
-              src="https://picsum.photos/1200/400"
-              alt="Person hailing a cab at an airport" // Updated alt text
+              src="/img/car_at_airport.jpg"
+              alt="People getting into a car at an airport" // Updated alt text
               width={1200}
               height={400}
               className="rounded-lg shadow-md mx-auto mb-8 object-cover" // Added object-cover
-              data-ai-hint="person hailing cab airport" // Updated data-ai-hint
+              data-ai-hint="people getting into a car at an airport" // Updated data-ai-hint
               priority // Add priority for LCP image
             />
         <Button asChild size="lg">

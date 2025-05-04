@@ -1,24 +1,32 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow public read access to the events collection
+    // Rules for the 'events' collection
     match /events/{eventId} {
-      allow read: if true;
-      // You might want to restrict event creation/modification
-      // allow write: if request.auth != null; // Example: only logged-in users
-
-      // Rules for the 'attendees' subcollection
-      match /attendees/{userId} {
-        // Allow authenticated users to read/write their own attendance record
-        allow get, write: if request.auth != null && request.auth.uid == userId;
-        // Optionally, allow listing attendees only for logged-in users?
-        allow list: if request.auth != null;
-      }
+      allow get: if true;
+      allow list: if true;
+      // allow write: if request.auth != null;
     }
 
-    // Allow users to read and write their own profile data
+    // --- Rules for the top-level 'attendance' collection ---
+    match /attendance/{attendanceId} {
+      allow get: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow list: if request.auth != null;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow update: if request.auth != null && request.auth.uid == resource.data.userId
+                     && request.resource.data.userId == resource.data.userId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // --- Rules for the 'users' collection ---
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // Allow any authenticated user to GET any user's profile (for matching)
+      allow get: if request.auth != null;
+      // Allow listing user documents (might be needed if querying users, check if necessary)
+      // Be careful with allowing list without constraints if you have many users.
+      allow list: if request.auth != null; 
+      // Only allow a user to create, update, or delete their OWN profile
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
   }
 }
