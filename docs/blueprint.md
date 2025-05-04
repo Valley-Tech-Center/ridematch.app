@@ -1,4 +1,4 @@
-# **App Name**: RideThere
+# **App Name**: RideMatch.app
 
 ## Core Features:
 

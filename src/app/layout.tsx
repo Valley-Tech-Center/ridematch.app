@@ -9,7 +9,7 @@ import { Toaster } from '@/components/ui/toaster'; // Import Toaster for notific
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'RideThere', // Updated title
+  title: 'RideMatch.app', // Updated title
   description: 'Coordinate rides for events', // Updated description
 };
 

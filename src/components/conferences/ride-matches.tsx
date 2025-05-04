@@ -280,7 +280,7 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
                     </TableCell>
                     <TableCell>{formatTime(match.arrivalDateTime)}</TableCell>
                     <TableCell className="text-right">
-                       <Button
+                       {/* <Button
                             size="sm"
                             onClick={() => sendRideRequest(match.userId, 'arrival')}
                             disabled={sendingNotification[match.userId + 'arrival']}
@@ -289,7 +289,7 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
                         >
                          {sendingNotification[match.userId + 'arrival'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                          Let's Ride
-                       </Button>
+                       </Button> */}
                     </TableCell>
                   </TableRow>
                 ))}
