@@ -20,13 +20,30 @@ service cloud.firestore {
 
     // --- Rules for the 'users' collection ---
     match /users/{userId} {
-      // Allow any authenticated user to GET any user's profile (for matching)
       allow get: if request.auth != null;
-      // Allow listing user documents (might be needed if querying users, check if necessary)
-      // Be careful with allowing list without constraints if you have many users.
       allow list: if request.auth != null; 
-      // Only allow a user to create, update, or delete their OWN profile
       allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // --- Rules for the 'notifications' collection ---
+    match /notifications/{notificationId} {
+      // Allow authenticated users to create notifications if senderId matches their UID
+      allow create: if request.auth != null && request.resource.data.senderId == request.auth.uid;
+
+      // Allow recipient to read/get the notification 
+      // (Could also allow sender: resource.data.senderId == request.auth.uid)
+      allow get: if request.auth != null && resource.data.recipientId == request.auth.uid;
+      
+      // Allow recipient to list notifications where they are the recipient
+      // Query must include where('recipientId', '==', request.auth.uid)
+      allow list: if request.auth != null; 
+
+      // Allow recipient to update the notification (e.g., mark as read, update status)
+      // Ensure they don't change sender/recipient/event etc.
+      allow update: if request.auth != null && resource.data.recipientId == request.auth.uid;
+      
+      // Optionally allow deletion (e.g., by recipient)
+      // allow delete: if request.auth != null && resource.data.recipientId == request.auth.uid;
     }
   }
 }
