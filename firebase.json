@@ -1,0 +1,23 @@
+{
+  "hosting": {
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin-allow-popups"
+          }
+          // You might need to add Cross-Origin-Embedder-Policy (COEP) as well,
+          // depending on other resources you load. Start with just COOP.
+          // {
+          //   "key": "Cross-Origin-Embedder-Policy",
+          //   "value": "require-corp" // or "unsafe-none"
+          // }
+        ]
+      }
+    ]
+    // If you have other hosting configurations (like public directory, rewrites),
+    // make sure to merge them into this file or configure them via the Firebase Console.
+  }
+}
