@@ -9,7 +9,16 @@ export function Footer() {
             © {new Date().getFullYear()} RideMatch. All rights reserved.
           </p>
         </div>
-         {/* Add social links or other footer content here */}
+        <div className="flex flex-col items-center gap-4 px-8 md:flex-row md:gap-2 md:px-0">
+          <a 
+            href="https://github.com/Valley-Tech-Center/ridematch.app/issues" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className="text-center text-sm leading-loose text-muted-foreground hover:text-foreground md:text-left"
+          >
+            Feedback
+          </a>
+        </div>
       </div>
     </footer>
   );
