@@ -1,5 +1,10 @@
 import React from 'react';
 
+/**
+ * Renders the application footer with copyright information and a feedback link.
+ *
+ * Displays the current year and a link to the RideMatch GitHub issues page, styled for responsive layouts.
+ */
 export function Footer() {
   return (
     <footer className="border-t bg-muted/40">
