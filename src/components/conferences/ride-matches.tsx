@@ -39,7 +39,7 @@ interface RideMatchesProps {
 }
 
 // Time difference in minutes
-const MAX_TIME_DIFF_MINUTES = 30;
+const MAX_TIME_DIFF_MINUTES = 59;
 
 // Helper to format time
 const formatTime = (ts: Timestamp | null | undefined): string => {
@@ -325,7 +325,7 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
                      </TableCell>
                     <TableCell>{formatTime(match.departureDateTime)}</TableCell>
                     <TableCell className="text-right">
-                       <Button
+                       {/* <Button
                             size="sm"
                             onClick={() => sendRideRequest(match.userId, 'departure')}
                             disabled={sendingNotification[match.userId + 'departure']}
@@ -334,7 +334,7 @@ const RideMatches: React.FC<RideMatchesProps> = ({ eventId, currentUserId, curre
                        >
                          {sendingNotification[match.userId + 'departure'] ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
                          Let's Ride
-                      </Button>
+                      </Button> */}
                     </TableCell>
                   </TableRow>
                 ))}

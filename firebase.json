@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "public": "public", // Added this line
     "headers": [
       {
         "source": "**",
@@ -17,7 +18,7 @@
         ]
       }
     ]
-    // If you have other hosting configurations (like public directory, rewrites),
+    // If you have other hosting configurations (like rewrites),
     // make sure to merge them into this file or configure them via the Firebase Console.
   }
 }
