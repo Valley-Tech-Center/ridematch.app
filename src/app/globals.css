@@ -8,12 +8,12 @@ body {
 
 @layer base {
   :root {
-    /* Calming Blue */
-    --primary-hsl: 207 65% 53%; /* #3498db */
+    /* Vibrant Green */
+    --primary-hsl: 145 63% 51%; /* #2ecc71 (was blue #3498db) */
     /* Clean White */
     --secondary-hsl: 0 0% 100%; /* #ffffff */
-    /* Vibrant Green */
-    --accent-hsl: 145 63% 51%; /* #2ecc71 */
+    /* Calming Blue */
+    --accent-hsl: 207 65% 53%; /* #3498db (was green #2ecc71) */
 
     --background: 0 0% 100%; /* White background */
     --foreground: 240 10% 3.9%; /* Dark text for contrast */
@@ -41,33 +41,33 @@ body {
 
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: var(--primary-hsl); /* Ring color uses primary */
+    --ring: var(--primary-hsl); /* Ring color uses primary (now green) */
 
-    --chart-1: var(--primary-hsl);
-    --chart-2: var(--accent-hsl);
+    --chart-1: var(--primary-hsl); /* Green */
+    --chart-2: var(--accent-hsl); /* Blue */
     --chart-3: 200 70% 60%; /* Lighter blue */
     --chart-4: 160 60% 45%; /* Teal */
     --chart-5: 40 80% 55%; /* Orange */
 
     --radius: 0.5rem;
 
-    /* Sidebar theme using primary blue */
+    /* Sidebar theme using primary (now green) */
     --sidebar-background: var(--primary-hsl);
     --sidebar-foreground: 0 0% 100%; /* White */
     --sidebar-primary: 0 0% 100%; /* White */
-    --sidebar-primary-foreground: var(--primary-hsl); /* Blue */
-    --sidebar-accent: 207 65% 65%; /* Lighter Blue for hover */
+    --sidebar-primary-foreground: var(--primary-hsl); /* Green */
+    --sidebar-accent: 145 63% 65%; /* Lighter Green for hover */
     --sidebar-accent-foreground: 0 0% 100%; /* White */
-    --sidebar-border: 207 65% 45%; /* Darker blue border */
+    --sidebar-border: 145 63% 40%; /* Darker green border */
     --sidebar-ring: 0 0% 100%; /* White */
 
   }
 
   .dark {
-    /* Dark Theme Adjustments - Keeping similar hues but darker */
-    --primary-hsl: 207 65% 53%; /* #3498db */
+    /* Dark Theme Adjustments */
+    --primary-hsl: 145 63% 45%; /* Darker Green (was blue) */
     --secondary-hsl: 240 3.7% 15.9%; /* Dark Gray */
-    --accent-hsl: 145 63% 45%; /* Darker Green */
+    --accent-hsl: 207 65% 48%; /* Darker Blue (was darker green) */
 
     --background: 240 10% 3.9%; /* Very Dark Gray/Black */
     --foreground: 0 0% 98%; /* White text */
@@ -94,22 +94,22 @@ body {
 
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
-    --ring: var(--primary-hsl);
+    --ring: var(--primary-hsl); /* Ring color uses primary (now green) */
 
-    --chart-1: var(--primary-hsl);
-    --chart-2: var(--accent-hsl);
+    --chart-1: var(--primary-hsl); /* Darker Green */
+    --chart-2: var(--accent-hsl); /* Darker Blue */
     --chart-3: 200 70% 50%;
     --chart-4: 160 60% 35%;
     --chart-5: 40 80% 45%;
 
-    /* Dark Sidebar theme */
+    /* Dark Sidebar theme using primary (now green) */
     --sidebar-background: var(--primary-hsl);
     --sidebar-foreground: 0 0% 100%; /* White */
     --sidebar-primary: 0 0% 100%; /* White */
-    --sidebar-primary-foreground: var(--primary-hsl); /* Blue */
-    --sidebar-accent: 207 65% 65%; /* Lighter Blue */
+    --sidebar-primary-foreground: var(--primary-hsl); /* Darker Green */
+    --sidebar-accent: 145 63% 55%; /* Lighter Green */
     --sidebar-accent-foreground: 0 0% 100%; /* White */
-    --sidebar-border: 207 65% 45%; /* Darker blue border */
+    --sidebar-border: 145 63% 35%; /* Even Darker green border */
     --sidebar-ring: 0 0% 100%; /* White */
   }
 }
