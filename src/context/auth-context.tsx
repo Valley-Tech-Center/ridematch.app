@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   message = "This email is already registered.";
                   break;
               case 'auth/weak-password':
-                  message = "Password is too weak. It should be at least 6 characters.";
+                  message = "Password does not meet requirements. Please ensure it has an uppercase letter, a lowercase letter, a special character, a number, and is at least 12 characters long.";
                   break;
                case 'auth/popup-closed-by-user':
                   message = "Sign-in process cancelled.";
